@@ -24,6 +24,8 @@ export const PRODUCTS: Product[] = [
 ];
 export const CUSTOM = 'custom'; // 自行搜尋加入的商品
 export const productOf = (key: string | null) => PRODUCTS.find((p) => p.key === key);
+// 顯示用名稱：品名已含品牌（例如「雅漾舒護活泉水」）就不再重複加品牌
+export const productLabel = (p: Product) => { const b = p.brand.split(' ')[0]; return p.name.startsWith(b) ? p.name : `${b} ${p.name}`; };
 
 export function classify(title: string): Classified {
   const t = normalize(title);

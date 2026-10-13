@@ -192,6 +192,19 @@ button { font: inherit; color: inherit; }
 .added { font-size: 13px; color: var(--down); }
 .err { font-size: 12px; color: var(--up); }
 
+/* 歷史查詢 */
+.hist-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 10px; }
+.hist-form label { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.hist-form select, .hist-form input { width: auto; min-width: 160px; padding: 8px 10px; }
+.hist-form .primary { padding: 9px 20px; }
+.presets { margin-bottom: 28px; }
+.export { margin-left: auto; text-decoration: none; }
+.row-static > * { background: var(--surface); }
+.hist-sub { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.log li { padding: 6px 0; border-bottom: 1px solid var(--rule); }
+.log li:last-child { border-bottom: 0; }
+.banners a { text-decoration: none; }
+
 /* 管理頁沿用 */
 .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
 .muted { color: var(--muted); font-size: 13px; }
@@ -212,17 +225,20 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px
   .grid-table { min-width: 0; display: block; }
   .grid-table thead { display: none; }
   .grid-table tbody { display: grid; gap: 10px; }
-  .grid-table tr.row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
-  .grid-table tr.row > th { grid-column: 1 / -1; width: auto; border-bottom: 1px solid var(--rule); padding: 10px 12px; }
-  .grid-table tr.row > td { border-bottom: 0; padding: 8px 12px 12px; border-left: 1px solid var(--rule); }
-  .grid-table tr.row > td:nth-of-type(1) { border-left: 0; }
-  .grid-table tr.row > td::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .grid-table tr.row, .grid-table tr.row-static { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
+  .grid-table tr.row-static > th, .grid-table tr.row > th { grid-column: 1 / -1; width: auto; border-bottom: 1px solid var(--rule); padding: 10px 12px; }
+  .grid-table tr.row-static > td, .grid-table tr.row > td { border-bottom: 0; padding: 8px 12px 12px; border-left: 1px solid var(--rule); }
+  .grid-table tr > td:nth-of-type(1) { border-left: 0; }
+  .grid-table tr.row-static > td::before, .grid-table tr.row > td::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
   .grid-table tr.detail { display: block; margin-top: -10px; }
   .grid-table tr.detail > td { display: block; border: 1px solid var(--rule); border-top: 0; border-radius: 0 0 12px 12px; }
   .grid-table tr.row.is-open { border-radius: 12px 12px 0 0; }
   .price { font-size: 16px; }
   .lowest { display: block; width: max-content; margin: 3px 0 0; }
   .delta { margin-left: 4px; }
+  .hist-form label { flex: 1 1 140px; }
+  .hist-form select, .hist-form input { width: 100%; min-width: 0; }
+  .export { margin-left: 0; }
   .site-head-in { flex-wrap: wrap; gap: 10px 16px; }
   .search { order: 3; flex-basis: 100%; max-width: none; }
   .switcher { grid-template-columns: repeat(2, minmax(0, 1fr)); }

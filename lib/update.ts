@@ -5,6 +5,7 @@ import { searchMomo } from './momoSearch';
 import { fetchAllOfficial } from './official';
 import { BIGGO_QUERIES, searchBiggo, type BiggoItem } from './biggo';
 import { fetchNews } from './news';
+import { logPromos, archiveBanners } from './archive';
 
 // 抓取所有啟用中的商品頁並寫入當日價格
 export async function runUpdate(onlyIds?: number[]) {
@@ -67,6 +68,11 @@ export async function runUpdate(onlyIds?: number[]) {
     );
   }
   Object.assign(summary, { momo_bank_banners: banners.length }, await biggo, await news, await official);
+  if (full) {
+    // 所有價格寫完後，整理當天的活動紀錄並備份新的銀行優惠圖片
+    const [promos_logged, banners_archived] = await Promise.all([logPromos(day).catch(() => -1), archiveBanners().catch(() => -1)]);
+    Object.assign(summary, { promos_logged, banners_archived });
+  }
   return summary;
 }
 

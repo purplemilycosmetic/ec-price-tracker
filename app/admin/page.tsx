@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { PRODUCTS } from '@/lib/classify';
+import { PRODUCTS, productLabel } from '@/lib/classify';
 
 export default function Admin() {
   const [key, setKey] = useState('');
@@ -33,7 +33,7 @@ export default function Admin() {
       <label>品項（留空＝依標題自動判斷）</label>
       <select value={line} onChange={(e) => setLine(e.target.value)}>
         <option value="">自動判斷</option>
-        {PRODUCTS.map((p, i) => <option key={p.key} value={i}>{p.brand.split(' ')[0]} {p.name}</option>)}
+        {PRODUCTS.map((p, i) => <option key={p.key} value={i}>{productLabel(p)}</option>)}
       </select>
       <div style={{ marginTop: 16 }}><button className="primary" disabled={busy || !key || !urls} onClick={submit}>{busy ? '處理中…' : '加入並抓取'}</button></div>
       {msg && <p>{msg}</p>}

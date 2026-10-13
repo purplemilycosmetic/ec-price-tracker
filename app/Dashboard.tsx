@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { PRODUCTS, CUSTOM } from '@/lib/classify';
 import TrendChart from './TrendChart';
+import { SITEWIDE } from '@/lib/promo';
 
 export type Listing = {
   id: number; brand: string | null; line: string | null; spec: string | null; platform: string;
@@ -34,8 +35,6 @@ function specSort(a: string, b: string) {
   const v = (s: string) => { const m = s.match(/([\d.]+)\D+(?:×(\d+))?/); return m ? +m[1] * (+(m[2] || 1)) : 1e9; };
   return v(a) - v(b);
 }
-// 全站通用、可以和商品折扣疊加的活動
-const SITEWIDE = /全館|刷.*卡|信用卡|回饋|mo幣|蝦幣|折價券|優惠券|免運|LINE Pay|街口|全支付/;
 
 function Img({ src, alt, className }: { src: string | null | undefined; alt: string; className: string }) {
   if (!src) return <span className={`${className} img-empty`} aria-hidden />;
@@ -286,7 +285,7 @@ export default function Dashboard({ listings, snaps, events, officials, today }:
         <section className="block">
           <div className="block-head">
             <h2>每日價格趨勢</h2>
-            <p>各平台同一規格的每日最低價。</p>
+            <p>各平台同一規格的每日最低價，顯示最近 30 天。<a href={`/history?product=${tab.key}`}>查更早的價格與活動</a></p>
           </div>
           {specs.length > 1 && (
             <div className="seg" role="group" aria-label="選擇規格">
