@@ -188,7 +188,7 @@ export default function Dashboard({ listings, snaps, today }: { listings: Listin
           </tbody>
         </table>
       </div>
-      <div className="muted" style={{ marginTop: 8 }}>紅字為該規格今日最低價。價格為頁面顯示的折後價，不含折價券、信用卡回饋。點列可展開走勢與各商品頁。</div>
+      <div className="muted" style={{ marginTop: 8 }}>紅字為該規格今日最低價。價格為頁面顯示的折後價，不含折價券、信用卡回饋。蝦皮（蝦皮商城）與酷澎價格經由 BigGo 比價網取得，可能比平台實際價格晚幾小時更新。點列可展開走勢與各商品頁。</div>
 
       <h2>各平台今日活動</h2>
       <div className="promos">

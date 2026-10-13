@@ -56,6 +56,7 @@ export async function runBiggo(day: string) {
     for (const it of items) {
       const c = classify(it.title);
       if (!c.brand || !c.line) continue; // 只留追蹤中的品項
+      if (/非賣品|贈品|請勿下單|兌換|0元加購/.test(it.title) || it.price >= 9999) continue; // 贈品、佔位商品
       const prev = found.get(it.url);
       if (!prev || it.price < prev.price) found.set(it.url, it);
     }

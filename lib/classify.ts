@@ -52,13 +52,13 @@ export function parseSpec(raw: string): string | null {
   // NFKC 會把全形括號轉成半形，所以兩種都比對；括號內沒有容量或入數就忽略（例如「(化妝水/噴霧)」）
   const vm = t.match(/[（(]([^（）()]*)[）)]\s*$/);
   const variant = vm && !/^\s*(送|贈|加贈)/.test(vm[1]) && (volOf(vm[1]) || /\d+\s*(入|瓶|罐|件)/.test(vm[1])) ? vm[1] : null;
+  if (combo) return '組合 ' + combo[0].replace(/\s/g, '').replace(/[xX＊*]/g, '×').replace(/×1(?!\d)/g, '').toLowerCase();
   if (variant && vm) {
     const v = volOf(variant);
     const base = v || volOf(t.slice(0, vm.index));
     const mult = multOf(variant, v?.end ?? 0);
     if (base) return base.text + (mult ? ` ×${mult}` : '');
   }
-  if (combo) return '組合 ' + combo[0].replace(/\s/g, '').replace(/[xX＊*]/g, '×').replace(/×1(?!\d)/g, '').toLowerCase();
   const v = volOf(t);
   if (!v) { const n = t.match(/(\d+)\s*入/); return n ? `${n[1]}入組（未標容量）` : null; }
   const mult = multOf(t, v.end);
