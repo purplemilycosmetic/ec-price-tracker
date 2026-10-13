@@ -2,6 +2,7 @@ import { adminDb, todayTaipei } from './db';
 import { scrape } from './scrapers';
 import { classify } from './classify';
 import { BIGGO_QUERIES, searchBiggo, type BiggoItem } from './biggo';
+import { fetchNews } from './news';
 
 // 抓取所有啟用中的商品頁並寫入當日價格
 export async function runUpdate(onlyIds?: number[]) {
@@ -14,6 +15,7 @@ export async function runUpdate(onlyIds?: number[]) {
   const day = todayTaipei();
   const summary = { total: listings!.length, ok: 0, blocked: 0, failed: 0, deactivated: 0 };
   const queue = [...listings!];
+  const banners: { href: string; src: string }[] = [];
 
   async function worker() {
     while (queue.length) {
@@ -21,7 +23,7 @@ export async function runUpdate(onlyIds?: number[]) {
       const r = await scrape(l.platform, l.url);
       if (r.title) {
         const c = classify(r.title);
-        const patch: any = { title: r.title, spec: c.spec ?? l.spec, brand: l.brand || c.brand, line: l.line || c.line };
+        const patch: any = { title: r.title, spec: c.spec ?? l.spec, brand: l.brand || c.brand, line: l.line || c.line, image_url: r.image ?? l.image_url };
         // 種子清單中不屬於追蹤品項的商品（例如防曬）自動停用
         if (!l.brand && !l.line && (!c.brand || !c.line)) { patch.active = false; summary.deactivated++; }
         await db.from('ec_listings').update(patch).eq('id', l.id);
@@ -34,14 +36,34 @@ export async function runUpdate(onlyIds?: number[]) {
         },
         { onConflict: 'listing_id,captured_on' },
       );
+      if (r.banners?.length && !banners.length) banners.push(...r.banners);
       if (r.status === 'ok') summary.ok++; else if (r.status === 'blocked') summary.blocked++; else summary.failed++;
       await new Promise((res) => setTimeout(res, 200)); // 放慢速度，避免對平台造成負擔
     }
   }
-  const biggo = onlyIds?.length ? Promise.resolve({}) : runBiggo(day).catch((e) => ({ biggo_error: String(e) }));
+  const full = !onlyIds?.length;
+  const biggo = full ? runBiggo(day).catch((e) => ({ biggo_error: String(e) })) : Promise.resolve({});
+  const news = full ? runNews(day).catch((e) => ({ news_error: String(e) })) : Promise.resolve({});
   await Promise.all([worker(), worker(), worker(), worker()]);
-  Object.assign(summary, await biggo);
+  if (banners.length) {
+    await db.from('ec_platform_events').upsert(
+      banners.map((b) => ({ platform: 'momo', kind: 'bank', title: '銀行／支付優惠', url: b.href, image_url: b.src, source: 'momo', last_seen: day })),
+      { onConflict: 'platform,url' },
+    );
+  }
+  Object.assign(summary, { momo_bank_banners: banners.length }, await biggo, await news);
   return summary;
+}
+
+// 平台大型活動新聞
+export async function runNews(day: string) {
+  const items = await fetchNews();
+  if (items.length)
+    await adminDb().from('ec_platform_events').upsert(
+      items.map((n) => ({ platform: n.platform, kind: 'news', title: n.title, url: n.url, source: n.source, published_at: n.published_at, last_seen: day })),
+      { onConflict: 'platform,url' },
+    );
+  return { news_found: items.length };
 }
 
 // 蝦皮商城、酷澎：從 BigGo 搜尋結果整批更新（搜尋同時進行、資料庫整批寫入，避免超過執行時間）
@@ -77,7 +99,7 @@ export async function runBiggo(day: string) {
   // 新商品加入、既有商品更新標題與規格（不會動到手動停用的設定）
   const rows = items.map((i) => {
     const c = classify(i.title);
-    return { platform: i.platform, url: i.url, title: i.title, brand: c.brand, line: c.line, spec: c.spec };
+    return { platform: i.platform, url: i.url, title: i.title, brand: c.brand, line: c.line, spec: c.spec, image_url: i.image ?? null };
   });
   const { data: saved, error } = await db.from('ec_listings').upsert(rows, { onConflict: 'url' }).select('id,url,active');
   if (error) throw error;

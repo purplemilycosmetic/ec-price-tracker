@@ -14,7 +14,7 @@ export const BIGGO_QUERIES = [
   'OLAY 乳霜', 'OLAY 大紅瓶 乳霜', 'OLAY 超紅瓶 乳霜',
 ];
 
-export type BiggoItem = { platform: string; title: string; url: string; price: number; spec?: string; promos: { text: string }[] };
+export type BiggoItem = { platform: string; title: string; url: string; price: number; spec?: string; promos: { text: string }[]; image?: string | null };
 
 const decode = (s: string) =>
   s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -58,7 +58,8 @@ export function parseBiggo(html: string): BiggoItem[] {
       if (ch && ch[1] === '降價') add(`近期降價 $${ch[2]}`); // 漲價不算活動
     }
     for (const m of Array.from(title.matchAll(/買\d+送\d+|\d+入特惠組?|特惠組|限定包裝|限量版?|免運/g))) add(m[0]);
-    out.push({ platform, title: specLabel ? `${title}（${specLabel}）` : title, url: canonicalUrl(platform, purl), price, spec: specLabel, promos: promos.slice(0, 4) });
+    const image = c.match(/ProductImage[\s\S]*?<img[^>]*src="(https:\/\/[^"]+)"/)?.[1] || null;
+    out.push({ image: image && decode(image), platform, title: specLabel ? `${title}（${specLabel}）` : title, url: canonicalUrl(platform, purl), price, spec: specLabel, promos: promos.slice(0, 4) });
   }
   return out;
 }

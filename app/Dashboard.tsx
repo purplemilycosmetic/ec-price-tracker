@@ -1,11 +1,19 @@
 'use client';
 import { Fragment, useMemo, useState } from 'react';
 import { LINES } from '@/lib/classify';
+import TrendChart from './TrendChart';
 
-export type Listing = { id: number; brand: string | null; line: string | null; spec: string | null; platform: string; url: string; title: string | null };
+export type Listing = {
+  id: number; brand: string | null; line: string | null; spec: string | null; platform: string;
+  url: string; title: string | null; image_url: string | null;
+};
 export type Snap = {
   listing_id: number; captured_on: string; status: string; list_price: number | null; sale_price: number | null;
   final_price: number | null; promos: { text: string; period?: string }[]; in_stock: boolean | null; error: string | null;
+};
+export type PlatformEvent = {
+  id: number; platform: string; kind: string; title: string | null; url: string; image_url: string | null;
+  source: string | null; published_at: string | null; last_seen: string;
 };
 
 const PLATFORMS = [
@@ -14,40 +22,27 @@ const PLATFORMS = [
   { key: 'shopee', name: '蝦皮' },
   { key: 'coupang', name: '酷澎' },
 ];
+const pname = (k: string) => PLATFORMS.find((p) => p.key === k)?.name ?? k;
 const STATUS: Record<string, string> = { blocked: '平台阻擋', not_found: '已下架', error: '抓取失敗' };
 const fmt = (n: number | null | undefined) => (n == null ? '—' : `$${n.toLocaleString()}`);
-
-function specKey(spec: string | null) {
-  return spec || '未標示規格';
-}
-// 依容量與入數排序
+const specKey = (spec: string | null) => spec || '未標示規格';
 function specSort(a: string, b: string) {
   const v = (s: string) => { const m = s.match(/([\d.]+)\D+(?:×(\d+))?/); return m ? +m[1] * (+(m[2] || 1)) : 1e9; };
   return v(a) - v(b);
 }
+// 全站通用、可以和商品折扣疊加的活動（全館滿額、刷卡回饋、折價券…）
+const SITEWIDE = /全館|刷.*卡|信用卡|回饋|mo幣|蝦幣|折價券|優惠券|免運|LINE Pay|街口|全支付/;
 
-function Spark({ series }: { series: { key: string; pts: (number | null)[] }[] }) {
-  const all = series.flatMap((s) => s.pts).filter((x): x is number => x != null);
-  if (all.length < 2) return <div className="muted">累積兩天以上資料後會顯示價格走勢</div>;
-  const min = Math.min(...all), max = Math.max(...all), W = 520, H = 120, P = 8;
-  const n = Math.max(...series.map((s) => s.pts.length));
-  const x = (i: number) => P + (i * (W - 2 * P)) / Math.max(1, n - 1);
-  const y = (v: number) => H - P - ((v - min) / Math.max(1, max - min)) * (H - 2 * P);
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: H }} role="img" aria-label="價格走勢">
-      {series.map((s) => {
-        let d = ''; s.pts.forEach((v, i) => { if (v != null) d += `${d && s.pts[i - 1] != null ? 'L' : 'M'}${x(i)},${y(v)}`; });
-        return <path key={s.key} d={d} fill="none" stroke={`var(--${s.key})`} strokeWidth={2} />;
-      })}
-      <text x={W - P} y={12} textAnchor="end" fontSize="11" fill="var(--muted)">{fmt(max)}</text>
-      <text x={W - P} y={H - 2} textAnchor="end" fontSize="11" fill="var(--muted)">{fmt(min)}</text>
-    </svg>
-  );
+function Thumb({ src, alt }: { src: string | null | undefined; alt: string }) {
+  if (!src) return <div className="thumb empty" />;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img className="thumb" src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" />;
 }
 
-export default function Dashboard({ listings, snaps, today }: { listings: Listing[]; snaps: Snap[]; today: string }) {
+export default function Dashboard({ listings, snaps, events, today }: { listings: Listing[]; snaps: Snap[]; events: PlatformEvent[]; today: string }) {
   const [tab, setTab] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
+  const [trendSpec, setTrendSpec] = useState<string | null>(null);
   const line = LINES[tab];
 
   const byListing = useMemo(() => {
@@ -57,15 +52,15 @@ export default function Dashboard({ listings, snaps, today }: { listings: Listin
   }, [snaps]);
   const days = useMemo(() => Array.from(new Set(snaps.map((s) => s.captured_on))).sort().slice(-30), [snaps]);
   const lastDay = days[days.length - 1];
+  const latest = (l: Listing) => { const h = byListing.get(l.id); return h?.[h.length - 1]; };
 
+  const lineListings = useMemo(() => listings.filter((l) => l.brand === line.brand && l.line === line.line), [listings, line]);
   const rows = useMemo(() => {
-    const ls = listings.filter((l) => l.brand === line.brand && l.line === line.line);
     const groups = new Map<string, Listing[]>();
-    for (const l of ls) { const k = specKey(l.spec); if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(l); }
+    for (const l of lineListings) { const k = specKey(l.spec); if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(l); }
     return Array.from(groups.entries()).sort((a, b) => specSort(a[0], b[0]));
-  }, [listings, line]);
+  }, [lineListings]);
 
-  // 各平台：取該規格最低的「今日」價格與前一天比較
   function cell(ls: Listing[], platform: string) {
     const mine = ls.filter((l) => l.platform === platform);
     if (!mine.length) return null;
@@ -80,24 +75,62 @@ export default function Dashboard({ listings, snaps, today }: { listings: Listin
       const prev = [...hist].reverse().find((h) => h.captured_on < s.captured_on && h.final_price != null);
       if (!best || s.final_price < best.s.final_price!) best = { l, s, prev };
     }
-    return { best, count: mine.length, anyStatus };
+    return { best, anyStatus };
+  }
+  // 規格列的代表圖：優先用最便宜那一筆的圖
+  function rowImage(ls: Listing[]) {
+    const withImg = ls.filter((l) => l.image_url);
+    withImg.sort((a, b) => (latest(a)?.final_price ?? 1e9) - (latest(b)?.final_price ?? 1e9));
+    return withImg[0]?.image_url;
   }
 
-  const promoBoard = useMemo(() => {
-    const out: Record<string, Map<string, { text: string; period?: string; titles: Set<string> }>> = {};
-    for (const l of listings) {
-      const hist = byListing.get(l.id) || [];
-      const s = hist[hist.length - 1];
+  // ---- 趨勢圖：選定規格，每個平台每天的最低價 ----
+  const specs = rows.map(([s]) => s);
+  const curSpec = trendSpec && specs.includes(trendSpec) ? trendSpec
+    : [...rows].sort((a, b) => new Set(b[1].map((l) => l.platform)).size - new Set(a[1].map((l) => l.platform)).size)[0]?.[0] ?? null;
+  const trendSeries = PLATFORMS.map((p) => ({
+    key: p.key, name: p.name,
+    pts: days.map((day) => {
+      const v = lineListings.filter((l) => specKey(l.spec) === curSpec && l.platform === p.key)
+        .map((l) => (byListing.get(l.id) || []).find((s) => s.captured_on === day && s.status === 'ok')?.final_price)
+        .filter((x): x is number => x != null);
+      return v.length ? Math.min(...v) : null;
+    }),
+  }));
+
+  // ---- 本品項活動：依平台分開，每則活動列出適用的規格 ----
+  const linePromos = useMemo(() => {
+    const out: Record<string, Map<string, { text: string; period?: string; specs: Set<string>; sitewide: boolean }>> = {};
+    for (const l of lineListings) {
+      const s = latest(l);
       if (!s || s.captured_on !== lastDay) continue;
       for (const p of s.promos || []) {
         out[l.platform] ||= new Map();
         const k = (p.period || '') + p.text;
-        if (!out[l.platform].has(k)) out[l.platform].set(k, { ...p, titles: new Set() });
-        out[l.platform].get(k)!.titles.add(`${l.brand ?? ''} ${l.spec ?? ''}`.trim());
+        if (!out[l.platform].has(k)) out[l.platform].set(k, { ...p, specs: new Set(), sitewide: SITEWIDE.test(p.text) });
+        out[l.platform].get(k)!.specs.add(specKey(l.spec));
       }
     }
     return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineListings, byListing, lastDay]);
+
+  // ---- 可搭配的平台活動（不分品項）----
+  const sitewide = useMemo(() => {
+    const out: Record<string, Map<string, { text: string; period?: string }>> = {};
+    for (const l of listings) {
+      const s = latest(l);
+      if (!s || s.captured_on !== lastDay) continue;
+      for (const p of s.promos || []) if (SITEWIDE.test(p.text)) {
+        out[l.platform] ||= new Map();
+        out[l.platform].set((p.period || '') + p.text, p);
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listings, byListing, lastDay]);
+  const banks = events.filter((e) => e.kind === 'bank');
+  const news = events.filter((e) => e.kind === 'news').sort((a, b) => (b.published_at || '').localeCompare(a.published_at || ''));
 
   return (
     <div className="wrap">
@@ -111,17 +144,18 @@ export default function Dashboard({ listings, snaps, today }: { listings: Listin
 
       <div className="tabs">
         {LINES.map((l, i) => (
-          <button key={i} className={`tab ${i === tab ? 'on' : ''}`} onClick={() => { setTab(i); setOpen(null); }}>
+          <button key={i} className={`tab ${i === tab ? 'on' : ''}`} onClick={() => { setTab(i); setOpen(null); setTrendSpec(null); }}>
             {l.brand.split(' ')[0]} {l.line}
           </button>
         ))}
       </div>
 
+      {/* 1. 比價表 */}
       <div className="card">
         <table>
           <thead>
             <tr>
-              <th style={{ width: 130 }}>規格</th>
+              <th style={{ width: 190 }}>規格</th>
               {PLATFORMS.map((p) => <th key={p.key}><span className="dot" style={{ background: `var(--${p.key})` }} />{p.name}</th>)}
             </tr>
           </thead>
@@ -136,7 +170,12 @@ export default function Dashboard({ listings, snaps, today }: { listings: Listin
               return (
                 <Fragment key={spec}>
                   <tr className="row" onClick={() => setOpen(isOpen ? null : spec)}>
-                    <td><b>{spec}</b><div className="sub">{ls.length} 個商品頁 {isOpen ? '▴' : '▾'}</div></td>
+                    <td>
+                      <div className="spec-cell">
+                        <Thumb src={rowImage(ls)} alt={spec} />
+                        <div><b>{spec}</b><div className="sub">{ls.length} 個商品頁 {isOpen ? '▴' : '▾'}</div></div>
+                      </div>
+                    </td>
                     {cells.map((c, i) => {
                       if (!c) return <td key={i} className="status">未追蹤</td>;
                       if (!c.best) return <td key={i} className="status">{STATUS[c.anyStatus?.status ?? ''] ?? '等待抓取'}</td>;
@@ -150,7 +189,6 @@ export default function Dashboard({ listings, snaps, today }: { listings: Listin
                           {d !== 0 && <span className={`delta ${d < 0 ? 'down' : 'up'}`}>{d < 0 ? '▼' : '▲'}{Math.abs(d)}</span>}
                           {s.list_price && s.list_price > s.final_price! && <div className="sub">原價 <span className="strike">{fmt(s.list_price)}</span></div>}
                           {s.in_stock === false && <div className="sub">缺貨</div>}
-                          <div>{(s.promos || []).slice(0, 2).map((p, j) => <span key={j} className="chip">{p.text}</span>)}</div>
                         </td>
                       );
                     })}
@@ -158,27 +196,17 @@ export default function Dashboard({ listings, snaps, today }: { listings: Listin
                   {isOpen && (
                     <tr className="detail">
                       <td colSpan={5}>
-                        <Spark series={PLATFORMS.map((p) => ({
-                          key: p.key,
-                          pts: days.map((day) => {
-                            const v = ls.filter((l) => l.platform === p.key)
-                              .map((l) => (byListing.get(l.id) || []).find((s) => s.captured_on === day)?.final_price)
-                              .filter((x): x is number => x != null);
-                            return v.length ? Math.min(...v) : null;
-                          }),
-                        }))} />
-                        <div style={{ marginTop: 10 }}>
-                          {ls.map((l) => {
-                            const s = (byListing.get(l.id) || []).at(-1);
-                            return (
-                              <div className="listing" key={l.id}>
-                                <span><span className="dot" style={{ background: `var(--${l.platform})` }} />{PLATFORMS.find((p) => p.key === l.platform)?.name}</span>
-                                <a href={l.url} target="_blank" rel="noreferrer">{l.title || l.url}</a>
-                                <span className="price" style={{ fontSize: 14 }}>{s?.status === 'ok' ? fmt(s.final_price) : STATUS[s?.status ?? ''] ?? '—'}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
+                        {ls.map((l) => {
+                          const s = latest(l);
+                          return (
+                            <div className="listing" key={l.id}>
+                              <Thumb src={l.image_url} alt={l.title || ''} />
+                              <span><span className="dot" style={{ background: `var(--${l.platform})` }} />{pname(l.platform)}</span>
+                              <a href={l.url} target="_blank" rel="noreferrer">{l.title || l.url}</a>
+                              <span className="price" style={{ fontSize: 14 }}>{s?.status === 'ok' ? fmt(s.final_price) : STATUS[s?.status ?? ''] ?? '—'}</span>
+                            </div>
+                          );
+                        })}
                       </td>
                     </tr>
                   )}
@@ -188,21 +216,76 @@ export default function Dashboard({ listings, snaps, today }: { listings: Listin
           </tbody>
         </table>
       </div>
-      <div className="muted" style={{ marginTop: 8 }}>紅字為該規格今日最低價。價格為頁面顯示的折後價，不含折價券、信用卡回饋。蝦皮（蝦皮商城）與酷澎價格經由 BigGo 比價網取得，可能比平台實際價格晚幾小時更新。點列可展開走勢與各商品頁。</div>
+      <div className="muted" style={{ marginTop: 8 }}>紅字為該規格今日最低價。價格為頁面顯示的折後價，不含折價券、信用卡回饋。蝦皮（蝦皮商城）與酷澎價格經由 BigGo 比價網取得，可能比平台實際價格晚幾小時更新。點列可展開各商品頁。</div>
 
-      <h2>各平台今日活動</h2>
+      {/* 2. 每日價格趨勢 */}
+      <h2>每日價格趨勢</h2>
+      {specs.length > 0 && (
+        <div className="chips">
+          {specs.map((s) => <button key={s} className={`chip-btn ${s === curSpec ? 'on' : ''}`} onClick={() => setTrendSpec(s)}>{s}</button>)}
+        </div>
+      )}
+      <div className="card pad">
+        {curSpec ? <TrendChart days={days} series={trendSeries} /> : <div className="muted">尚無資料</div>}
+      </div>
+
+      {/* 3. 本品項各平台活動 */}
+      <h2>{line.brand.split(' ')[0]} {line.line}｜各平台活動</h2>
       <div className="promos">
         {PLATFORMS.map((p) => {
-          const items = Array.from(promoBoard[p.key]?.values() || []);
+          const items = Array.from(linePromos[p.key]?.values() || []).sort((a, b) => Number(a.sitewide) - Number(b.sitewide));
           return (
-            <div className="card" key={p.key}>
+            <div className="card pad" key={p.key}>
               <b><span className="dot" style={{ background: `var(--${p.key})` }} />{p.name}</b>
               {items.length ? (
                 <ul>{items.slice(0, 12).map((it, i) => (
-                  <li key={i}>{it.period && <span className="muted">{it.period} </span>}{it.text}
-                    <span className="muted">（{Array.from(it.titles).slice(0, 3).join('、')}{it.titles.size > 3 ? '…' : ''}）</span></li>
+                  <li key={i}>
+                    {it.period && <span className="muted">{it.period} </span>}{it.text}
+                    {it.sitewide && <span className="tag">全站</span>}
+                    <div className="sub">適用：{Array.from(it.specs).sort(specSort).join('、')}</div>
+                  </li>
                 ))}</ul>
               ) : <div className="muted" style={{ marginTop: 8 }}>今日無資料</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 4. 可搭配的平台活動 */}
+      <h2>可搭配的平台活動</h2>
+      <div className="muted" style={{ marginTop: -4, marginBottom: 10 }}>不限品項、可以和上面商品折扣一起用的全站活動：全館滿額、銀行／支付回饋，以及近期購物節新聞。</div>
+      <div className="platform-events">
+        {PLATFORMS.filter((p) => p.key !== 'official').map((p) => {
+          const sw = Array.from(sitewide[p.key]?.values() || []);
+          const bk = banks.filter((b) => b.platform === p.key);
+          const nw = news.filter((n) => n.platform === p.key).slice(0, 6);
+          return (
+            <div className="card pad" key={p.key}>
+              <b><span className="dot" style={{ background: `var(--${p.key})` }} />{p.name}</b>
+              {sw.length > 0 && (<>
+                <div className="ev-h">全館活動</div>
+                <ul>{sw.map((s, i) => <li key={i}>{s.period && <span className="muted">{s.period} </span>}{s.text}</li>)}</ul>
+              </>)}
+              {bk.length > 0 && (<>
+                <div className="ev-h">銀行／支付優惠</div>
+                <div className="banners">
+                  {bk.map((b) => (
+                    <a key={b.id} href={b.url} target="_blank" rel="noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={b.image_url || ''} alt="銀行優惠活動" loading="lazy" referrerPolicy="no-referrer" />
+                    </a>
+                  ))}
+                </div>
+              </>)}
+              <div className="ev-h">近期活動新聞</div>
+              {nw.length ? (
+                <ul className="news">{nw.map((n) => (
+                  <li key={n.id}>
+                    <a href={n.url} target="_blank" rel="noreferrer">{n.title}</a>
+                    <div className="sub">{n.source}・{n.published_at?.slice(0, 10)}</div>
+                  </li>
+                ))}</ul>
+              ) : <div className="muted">近三週沒有相關新聞</div>}
             </div>
           );
         })}

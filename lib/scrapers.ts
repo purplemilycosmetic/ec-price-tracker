@@ -9,6 +9,8 @@ export type ScrapeResult = {
   promos?: Promo[];
   in_stock?: boolean | null;
   error?: string;
+  image?: string | null;
+  banners?: { href: string; src: string }[]; // 平台層級的銀行／支付優惠橫幅
 };
 
 const UA =
@@ -99,7 +101,13 @@ export async function scrapeMomo(url: string): Promise<ScrapeResult> {
     }
   }
   const in_stock = !/已售完|補貨中|銷售一空/.test(text.slice(0, 20000));
-  return { status: 'ok', title, list_price, sale_price, final_price, promos, in_stock };
+  const image = meta(html, 'og:image');
+  // 商品頁上的「銀行優惠活動」輪播，是全站共用的刷卡／支付優惠
+  const banners: { href: string; src: string }[] = [];
+  const re = /<a[^>]*href="([^"]*)"[^>]*>\s*(?:<[^a][^>]*>\s*)*<img[^>]*src="([^"]+)"[^>]*alt="銀行優惠活動"/g;
+  let bm;
+  while ((bm = re.exec(html)) && banners.length < 20) banners.push({ href: decode(bm[1]), src: decode(bm[2]) });
+  return { status: 'ok', title, list_price, sale_price, final_price, promos, in_stock, image, banners };
 }
 
 // ---------- 通用（品牌官網 / 酷澎）：JSON-LD、meta 價格 ----------
