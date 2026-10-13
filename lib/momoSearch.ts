@@ -14,7 +14,9 @@ export async function searchMomo(q: string): Promise<{ status: number; items: Mo
   for (const b of html.match(/<script[^>]+ld\+json[^>]*>([\s\S]*?)<\/script>/gi) || []) {
     let d: any;
     try { d = JSON.parse(b.replace(/^<script[^>]*>|<\/script>$/gi, '')); } catch { continue; }
-    const list = (Array.isArray(d) ? d : [d]).find((x) => /ItemList/.test(String(x?.['@type'])));
+    // 結構是 WebPage → @graph → [BreadcrumbList, ItemList]；要的是 ItemList
+    const nodes = (Array.isArray(d) ? d : [d]).flatMap((x) => [x, ...(x?.['@graph'] || [])]);
+    const list = nodes.find((x) => String(x?.['@type']) === 'ItemList');
     for (const el of list?.itemListElement || []) {
       const it = el.item || el;
       const code = String(it.url || '').match(/i_code=(\d+)/)?.[1];
