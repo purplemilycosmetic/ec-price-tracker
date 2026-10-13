@@ -8,6 +8,13 @@ export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
   if (!process.env.ADMIN_KEY || p.get('key') !== process.env.ADMIN_KEY)
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (p.get('runbiggo')) {
+    const { runBiggo } = await import('@/lib/update');
+    const { todayTaipei } = await import('@/lib/db');
+    const t0 = Date.now();
+    try { return NextResponse.json({ ...(await runBiggo(todayTaipei())), ms: Date.now() - t0 }); }
+    catch (e: any) { return NextResponse.json({ error: String(e?.message || e), stack: String(e?.stack).slice(0, 800) }); }
+  }
   if (p.get('biggo')) {
     const { searchBiggo } = await import('@/lib/biggo');
     const { classify } = await import('@/lib/classify');
