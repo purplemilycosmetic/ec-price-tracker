@@ -30,7 +30,11 @@ export async function GET(req: NextRequest) {
       const re = new RegExp(find, 'g'); let m;
       while ((m = re.exec(t)) && hits.length < 30) hits.push(t.slice(Math.max(0, m.index - 120), m.index + 200));
     }
-    return NextResponse.json({ status: r.status, finalUrl: r.url, len: t.length, server: r.headers.get('server'), hits, head: t.slice(0, n) });
+    if (p.get('save')) {
+      const { adminDb } = await import('@/lib/db');
+      await adminDb().from('ec_debug').insert({ url, status: r.status, body: t });
+    }
+    return NextResponse.json({ saved: !!p.get('save'), status: r.status, finalUrl: r.url, len: t.length, server: r.headers.get('server'), hits, head: t.slice(0, n) });
   } catch (e: any) {
     return NextResponse.json({ error: String(e?.message || e) });
   }
