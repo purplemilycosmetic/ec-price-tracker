@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type Series = { key: string; name: string; pts: (number | null)[] };
 const fmt = (n: number) => `$${n.toLocaleString()}`;
@@ -8,19 +8,33 @@ const fmt = (n: number) => `$${n.toLocaleString()}`;
 export default function TrendChart({ days, series }: { days: string[]; series: Series[] }) {
   const [hover, setHover] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(720);
+  // 依容器實際寬度繪圖，手機上文字不會被縮小
+  useEffect(() => {
+    if (!wrap.current) return;
+    const ro = new ResizeObserver(([e]) => setWidth(Math.round(e.contentRect.width)));
+    ro.observe(wrap.current);
+    return () => ro.disconnect();
+  }, []);
   const live = series.filter((s) => s.pts.some((v) => v != null));
   const all = live.flatMap((s) => s.pts).filter((v): v is number => v != null);
   if (!all.length) return <div className="muted chart-empty">這個規格還沒有價格資料</div>;
 
-  const W = 720, H = 260, L = 56, R = 72, T = 16, B = 32;
-  let lo = Math.min(...all), hi = Math.max(...all);
-  const pad = Math.max(20, (hi - lo) * 0.15);
-  lo = Math.max(0, Math.floor((lo - pad) / 50) * 50); hi = Math.ceil((hi + pad) / 50) * 50;
+  const W = Math.max(300, width), H = W < 500 ? 220 : 260, L = 52, R = W < 500 ? 52 : 72, T = 16, B = 32;
+  // 整齊的刻度：間距取 1/2/5 × 10^n
+  const rawLo = Math.min(...all), rawHi = Math.max(...all);
+  const span = Math.max(rawHi - rawLo, rawHi * 0.2, 20);
+  const mag = Math.pow(10, Math.floor(Math.log10(span / 4)));
+  const step = [1, 2, 5, 10].map((k) => k * mag).find((v) => span / v <= 5)!;
+  const lo = Math.max(0, Math.floor((rawLo - span * 0.1) / step) * step);
+  const hi = Math.ceil((rawHi + span * 0.1) / step) * step;
   const n = days.length;
   const x = (i: number) => (n <= 1 ? L + (W - L - R) / 2 : L + (i * (W - L - R)) / (n - 1));
   const y = (v: number) => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B);
-  const ticks = [0, 1, 2, 3, 4].map((k) => lo + ((hi - lo) * k) / 4);
-  const xEvery = Math.max(1, Math.ceil(n / 6));
+  const ticks: number[] = [];
+  for (let t = lo; t <= hi + 1e-9; t += step) ticks.push(t);
+  const xEvery = Math.max(1, Math.ceil(n / (W < 500 ? 4 : 7)));
 
   function onMove(e: React.MouseEvent<SVGSVGElement>) {
     const box = ref.current!.getBoundingClientRect();
@@ -37,8 +51,8 @@ export default function TrendChart({ days, series }: { days: string[]; series: S
   for (let k = 1; k < ends.length; k++) if (ends[k].y - ends[k - 1].y < 14) ends[k].y = ends[k - 1].y + 14;
 
   return (
-    <div className="chart-wrap">
-      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} className="chart" role="img" aria-label="各平台每日最低價趨勢"
+    <div className="chart-wrap" ref={wrap}>
+      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="chart" role="img" aria-label="各平台每日最低價趨勢"
         onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
         {ticks.map((t, k) => (
           <g key={k}>
