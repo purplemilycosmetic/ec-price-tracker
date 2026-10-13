@@ -54,7 +54,7 @@ export function classify(title: string): Classified {
 
 const CN: Record<string, string> = { 一: '1', 二: '2', 兩: '2', 三: '3', 四: '4', 五: '5', 六: '6', 七: '7', 八: '8', 九: '9', 十: '10' };
 export function normalize(t: string) {
-  return (t || '').normalize('NFKC').replace(/([一二兩三四五六七八九十])\s*(入|瓶|罐|件)/g, (_, c, u) => CN[c] + u);
+  return (t || '').normalize('NFKC').replace(/毫升/g, 'ml').replace(/公克/g, 'g').replace(/([一二兩三四五六七八九十])\s*(入|瓶|罐|件)/g, (_, c, u) => CN[c] + u);
 }
 
 function volOf(t: string) {
