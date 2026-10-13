@@ -49,6 +49,11 @@ export async function runUpdate(onlyIds?: number[]) {
         },
         { onConflict: 'listing_id,captured_on' },
       );
+      // 從沒抓到過資料、momo 又回系統訊息頁的商品頁（多半是已停售的舊品號）不再追蹤
+      if (!l.title && r.status !== 'ok' && /系統訊息/.test(r.error || '')) {
+        await db.from('ec_listings').update({ active: false }).eq('id', l.id);
+        summary.deactivated++;
+      }
       if (r.banners?.length && !banners.length) banners.push(...r.banners);
       if (r.status === 'ok') summary.ok++; else if (r.status === 'blocked') summary.blocked++; else summary.failed++;
       await new Promise((res) => setTimeout(res, 200)); // 放慢速度，避免對平台造成負擔
