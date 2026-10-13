@@ -1,4 +1,5 @@
 import { adminDb, todayTaipei } from '@/lib/db';
+import { cleanNews } from '@/lib/news';
 import Dashboard, { type Listing, type Snap, type PlatformEvent } from './Dashboard';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +33,7 @@ export default async function Page() {
     <Dashboard
       listings={(listings || []) as Listing[]}
       snaps={(snaps || []) as Snap[]}
-      events={[...(banks || []), ...(news || [])] as PlatformEvent[]}
+      events={[...(banks || []), ...cleanNews((news || []) as PlatformEvent[])] as PlatformEvent[]}
       today={todayTaipei()}
     />
   );

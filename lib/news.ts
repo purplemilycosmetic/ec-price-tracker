@@ -41,3 +41,16 @@ export async function fetchNews(maxAgeDays = 21): Promise<NewsItem[]> {
   }
   return out;
 }
+
+// 顯示前再清一次（舊資料也適用）：排除非活動新聞、同一事件只留最新一則
+export function cleanNews<T extends { platform: string; title: string | null }>(items: T[]): T[] {
+  const out: T[] = [];
+  for (const it of items) {
+    const t = it.title || '';
+    if (NOISE.test(t)) continue;
+    const key = t.replace(PUNCT, '').slice(0, 10);
+    if (out.some((o) => o.platform === it.platform && (o.title || '').replace(PUNCT, '').slice(0, 10) === key)) continue;
+    out.push(it);
+  }
+  return out;
+}
