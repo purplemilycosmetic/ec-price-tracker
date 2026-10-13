@@ -28,8 +28,11 @@ export function classify(title: string): Classified {
 }
 
 export function parseSpec(t: string): string | null {
+  // 組合包，例如 300mlx1+150mlx2
+  const combo = t.match(/\d+\s*(?:ml|g)\s*(?:[x×X＊*]\s*\d+)?(?:\s*\+\s*\d+\s*(?:ml|g)\s*(?:[x×X＊*]\s*\d+)?)+/i);
+  if (combo) return '組合 ' + combo[0].replace(/\s/g, '').replace(/[xX＊*]/g, '×').replace(/×1(?!\d)/g, '').toLowerCase();
   const vol = t.match(/(\d+(?:\.\d+)?)\s*(ml|g)(?![a-wyz])/i);
-  if (!vol) return null;
+  if (!vol) { const n = t.match(/(\d+)\s*入/); return n ? `${n[1]}入組（未標容量）` : null; }
   let spec = `${vol[1]}${vol[2].toLowerCase()}`;
   const after = t.slice((vol.index ?? 0) + vol[0].length, (vol.index ?? 0) + vol[0].length + 8);
   const mult = after.match(/^\s*[x×X＊*]\s*(\d+)/) || t.match(/(\d+)\s*入(?:組)?/);

@@ -89,12 +89,12 @@ export async function scrapeMomo(url: string): Promise<ScrapeResult> {
     if (m) {
       const body = (m[2].trim() || lines[i + 1] || '').trim();
       const key = m[1] + body;
-      if (body && !seen.has(key) && body.length < 60) { seen.add(key); promos.push({ period: m[1].replace(/\s/g, ''), text: body }); }
+      if (body && !seen.has(key) && body.length < 40 && !/[【】]/.test(body)) { seen.add(key); promos.push({ period: m[1].replace(/\s/g, ''), text: body }); }
     }
   });
   for (const l of lines) {
     if (promos.length >= 8) break;
-    if (/^(滿[\d,]+(件|元).*(折|送)|.*買\d送\d|.*最高折[\d,]+元|.*回饋.*%)/.test(l) && l.length < 50 && !promos.some((p) => p.text.includes(l) || l.includes(p.text))) {
+    if (/^(滿[\d,]+(件|元).*(折|送)|.*買\d送\d|.*最高折[\d,]+元|.*回饋.*%)/.test(l) && l.length < 30 && !/[【】]/.test(l) && !promos.some((p) => p.text.includes(l) || l.includes(p.text))) {
       promos.push({ text: l });
     }
   }

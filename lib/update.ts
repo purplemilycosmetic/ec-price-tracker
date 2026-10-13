@@ -20,7 +20,7 @@ export async function runUpdate(onlyIds?: number[]) {
       const r = await scrape(l.platform, l.url);
       if (r.title) {
         const c = classify(r.title);
-        const patch: any = { title: r.title, spec: l.spec || c.spec, brand: l.brand || c.brand, line: l.line || c.line };
+        const patch: any = { title: r.title, spec: c.spec ?? l.spec, brand: l.brand || c.brand, line: l.line || c.line };
         // 種子清單中不屬於追蹤品項的商品（例如防曬）自動停用
         if (!l.brand && !l.line && (!c.brand || !c.line)) { patch.active = false; summary.deactivated++; }
         await db.from('ec_listings').update(patch).eq('id', l.id);
