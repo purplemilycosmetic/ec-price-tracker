@@ -35,53 +35,51 @@ export async function runUpdate(onlyIds?: number[]) {
         { onConflict: 'listing_id,captured_on' },
       );
       if (r.status === 'ok') summary.ok++; else if (r.status === 'blocked') summary.blocked++; else summary.failed++;
-      await new Promise((res) => setTimeout(res, 400)); // 放慢速度，避免對平台造成負擔
+      await new Promise((res) => setTimeout(res, 200)); // 放慢速度，避免對平台造成負擔
     }
   }
-  await Promise.all([worker(), worker(), worker()]);
-  if (!onlyIds?.length) Object.assign(summary, await runBiggo(day));
+  const biggo = onlyIds?.length ? Promise.resolve({}) : runBiggo(day).catch((e) => ({ biggo_error: String(e) }));
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  Object.assign(summary, await biggo);
   return summary;
 }
 
-// 蝦皮商城、酷澎：從 BigGo 搜尋結果整批更新
+// 蝦皮商城、酷澎：從 BigGo 搜尋結果整批更新（搜尋同時進行、資料庫整批寫入，避免超過執行時間）
 export async function runBiggo(day: string) {
   const db = adminDb();
   const found = new Map<string, { platform: string; title: string; url: string; price: number }>();
   let searchFailed = 0;
-  for (const q of BIGGO_QUERIES) {
-    try {
-      const { status, items } = await searchBiggo(q);
-      if (status !== 200) searchFailed++;
-      for (const it of items) {
-        const c = classify(it.title);
-        if (!c.brand || !c.line) continue; // 只留追蹤中的品項
-        const prev = found.get(it.url);
-        if (!prev || it.price < prev.price) found.set(it.url, it);
-      }
-    } catch { searchFailed++; }
-    await new Promise((res) => setTimeout(res, 800));
-  }
-  let saved = 0;
-  for (const it of Array.from(found.values())) {
-    const c = classify(it.title);
-    const { data: existing } = await db.from('ec_listings').select('id,active').eq('url', it.url).maybeSingle();
-    let id = existing?.id;
-    if (existing && !existing.active) continue; // 手動停用的不再追蹤
-    if (!id) {
-      const { data } = await db.from('ec_listings')
-        .insert({ platform: it.platform, url: it.url, title: it.title, brand: c.brand, line: c.line, spec: c.spec })
-        .select('id').single();
-      id = data?.id;
-    } else {
-      await db.from('ec_listings').update({ title: it.title, spec: c.spec }).eq('id', id);
+  const results = await Promise.all(BIGGO_QUERIES.map((q, i) =>
+    new Promise((res) => setTimeout(res, i * 150)).then(() => searchBiggo(q)).catch(() => ({ status: 0, items: [] as any[] }))));
+  for (const { status, items } of results) {
+    if (status !== 200) searchFailed++;
+    for (const it of items) {
+      const c = classify(it.title);
+      if (!c.brand || !c.line) continue; // 只留追蹤中的品項
+      const prev = found.get(it.url);
+      if (!prev || it.price < prev.price) found.set(it.url, it);
     }
-    if (!id) continue;
-    await db.from('ec_price_snapshots').upsert(
-      { listing_id: id, captured_on: day, captured_at: new Date().toISOString(), status: 'ok',
-        final_price: it.price, sale_price: it.price, promos: [], in_stock: true, error: '來源：BigGo' },
-      { onConflict: 'listing_id,captured_on' },
-    );
-    saved++;
   }
-  return { biggo_found: saved, biggo_search_failed: searchFailed };
+  const items = Array.from(found.values());
+  if (!items.length) return { biggo_found: 0, biggo_search_failed: searchFailed };
+
+  const { data: existing } = await db.from('ec_listings').select('id,url,active').in('url', items.map((i) => i.url));
+  const byUrl = new Map((existing || []).map((e) => [e.url, e]));
+  const fresh = items.filter((i) => !byUrl.has(i.url)).map((i) => {
+    const c = classify(i.title);
+    return { platform: i.platform, url: i.url, title: i.title, brand: c.brand, line: c.line, spec: c.spec };
+  });
+  if (fresh.length) {
+    const { data } = await db.from('ec_listings').insert(fresh).select('id,url,active');
+    for (const d of data || []) byUrl.set(d.url, d);
+  }
+  const snaps = items
+    .map((i) => ({ i, l: byUrl.get(i.url) }))
+    .filter(({ l }) => l && l.active) // 手動停用的不再追蹤
+    .map(({ i, l }) => ({
+      listing_id: l!.id, captured_on: day, captured_at: new Date().toISOString(), status: 'ok',
+      final_price: i.price, sale_price: i.price, promos: [], in_stock: true, error: '來源：BigGo',
+    }));
+  if (snaps.length) await db.from('ec_price_snapshots').upsert(snaps, { onConflict: 'listing_id,captured_on' });
+  return { biggo_found: snaps.length, biggo_search_failed: searchFailed };
 }
