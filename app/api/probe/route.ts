@@ -8,6 +8,15 @@ export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
   if (!process.env.ADMIN_KEY || p.get('key') !== process.env.ADMIN_KEY)
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (p.get('biggo')) {
+    const { searchBiggo } = await import('@/lib/biggo');
+    const { classify } = await import('@/lib/classify');
+    const r = await searchBiggo(p.get('biggo')!);
+    const items = r.items.map((it) => ({ ...it, ...classify(it.title) }));
+    const { adminDb } = await import('@/lib/db');
+    await adminDb().from('ec_debug').insert({ url: 'biggo:' + p.get('biggo'), status: r.status, body: JSON.stringify(items) });
+    return NextResponse.json({ status: r.status, count: items.length, matched: items.filter((i) => i.line).length });
+  }
   const url = p.get('url')!;
   const find = p.get('find');
   const n = +(p.get('n') || 1500);

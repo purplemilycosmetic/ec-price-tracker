@@ -1,11 +1,12 @@
 import { adminDb, todayTaipei } from './db';
 import { scrape } from './scrapers';
 import { classify } from './classify';
+import { BIGGO_QUERIES, searchBiggo } from './biggo';
 
 // 抓取所有啟用中的商品頁並寫入當日價格
 export async function runUpdate(onlyIds?: number[]) {
   const db = adminDb();
-  let q = db.from('ec_listings').select('*').eq('active', true);
+  let q = db.from('ec_listings').select('*').eq('active', true).not('platform', 'in', '(shopee,coupang)');
   if (onlyIds?.length) q = q.in('id', onlyIds);
   const { data: listings, error } = await q;
   if (error) throw error;
@@ -38,5 +39,49 @@ export async function runUpdate(onlyIds?: number[]) {
     }
   }
   await Promise.all([worker(), worker(), worker()]);
+  if (!onlyIds?.length) Object.assign(summary, await runBiggo(day));
   return summary;
+}
+
+// 蝦皮商城、酷澎：從 BigGo 搜尋結果整批更新
+export async function runBiggo(day: string) {
+  const db = adminDb();
+  const found = new Map<string, { platform: string; title: string; url: string; price: number }>();
+  let searchFailed = 0;
+  for (const q of BIGGO_QUERIES) {
+    try {
+      const { status, items } = await searchBiggo(q);
+      if (status !== 200) searchFailed++;
+      for (const it of items) {
+        const c = classify(it.title);
+        if (!c.brand || !c.line) continue; // 只留追蹤中的品項
+        const prev = found.get(it.url);
+        if (!prev || it.price < prev.price) found.set(it.url, it);
+      }
+    } catch { searchFailed++; }
+    await new Promise((res) => setTimeout(res, 800));
+  }
+  let saved = 0;
+  for (const it of Array.from(found.values())) {
+    const c = classify(it.title);
+    const { data: existing } = await db.from('ec_listings').select('id,active').eq('url', it.url).maybeSingle();
+    let id = existing?.id;
+    if (existing && !existing.active) continue; // 手動停用的不再追蹤
+    if (!id) {
+      const { data } = await db.from('ec_listings')
+        .insert({ platform: it.platform, url: it.url, title: it.title, brand: c.brand, line: c.line, spec: c.spec })
+        .select('id').single();
+      id = data?.id;
+    } else {
+      await db.from('ec_listings').update({ title: it.title, spec: c.spec }).eq('id', id);
+    }
+    if (!id) continue;
+    await db.from('ec_price_snapshots').upsert(
+      { listing_id: id, captured_on: day, captured_at: new Date().toISOString(), status: 'ok',
+        final_price: it.price, sale_price: it.price, promos: [], in_stock: true, error: '來源：BigGo' },
+      { onConflict: 'listing_id,captured_on' },
+    );
+    saved++;
+  }
+  return { biggo_found: saved, biggo_search_failed: searchFailed };
 }

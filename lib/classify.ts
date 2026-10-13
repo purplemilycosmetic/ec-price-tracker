@@ -17,7 +17,10 @@ export function classify(title: string): Classified {
 
   let line: string | null = null;
   if (brand === '雅漾 Avène') {
-    if (/活泉水|噴霧/.test(t) && !/卸妝|潔膚|防曬/.test(t)) line = '活泉水噴霧';
+    // 主商品要是活泉水：「精華霜 送活泉水(小)」這種贈品組不算
+    const i = t.search(/活泉水|噴霧/);
+    const other = t.search(/霜|精華|精萃|乳|凝膠|面膜|眼|卸妝|潔膚|防曬|洗/);
+    if (i >= 0 && (other < 0 || i < other)) line = '活泉水噴霧';
   } else if (brand === 'AHC') {
     if (/原液/.test(t)) line = '原液';
     else if (/精華|安瓶|精萃/.test(t) && !/精華水|精華乳|化妝水|霜|防曬|面膜|眼/.test(t)) line = '精華液';
