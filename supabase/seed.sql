@@ -1,0 +1,26 @@
+-- 初始 momo 商品頁（非追蹤品項會在第一次抓取時自動停用）
+insert into listings (platform, url) values
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=7493417'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=7903701'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=9258336'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=8882139'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=12605440'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=15272031'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=15078389'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=7493420'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13167743'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13146566'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13714942'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13167599'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=15420664'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13714937'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13167744'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13151514'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13151507'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13190051'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=15302319'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13151665'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13052234'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=14502304'),
+  ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=13233685')
+on conflict (url) do nothing;
