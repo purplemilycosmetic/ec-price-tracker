@@ -16,7 +16,8 @@ export default async function Search({ searchParams }: { searchParams: { q?: str
   const sort = searchParams.sort === 'price' ? 'price' : 'relevance';
   let hits: Hit[] = [];
   let failed: string[] = [];
-  if (q) {
+  let crash = '';
+  if (q) try {
     const [m, b] = await Promise.all([
       searchMomo(q).catch(() => ({ status: 0, items: [] })),
       searchBiggo(q, true).catch(() => ({ status: 0, items: [] }))
@@ -30,7 +31,7 @@ export default async function Search({ searchParams }: { searchParams: { q?: str
       ...m.items.map((i) => ({ platform: 'momo', store: 'momo', title: i.title, url: i.url, price: i.price, image: i.image, ...tag(i.title) })),
       ...b.items.map((i) => ({ platform: i.platform, store: i.storeName, title: i.title, url: i.url, price: i.price, image: i.image ?? null, ...tag(i.title) })),
     ];
-  }
+  } catch (e: any) { crash = String(e?.stack || e).slice(0, 600); }
   const groups = ORDER.map((p) => {
     const list = hits.filter((h) => h.platform === p);
     if (sort === 'price') list.sort((a, b) => a.price - b.price);
@@ -57,6 +58,7 @@ export default async function Search({ searchParams }: { searchParams: { q?: str
             <a className={sort === 'price' ? 'on' : ''} href={`/search?q=${encodeURIComponent(q)}&sort=price`}>價格低到高</a>
           </div>
         )}
+        {crash && <pre className="warn" style={{ whiteSpace: 'pre-wrap' }}>搜尋時發生錯誤：{crash}</pre>}
         {failed.length > 0 && <p className="warn">{failed.join('、')} 這次沒有回應，結果可能不完整，稍後再搜一次。</p>}
       </section>
 
