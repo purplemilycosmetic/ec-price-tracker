@@ -14,7 +14,7 @@ export const BIGGO_QUERIES = [
   'OLAY 乳霜', 'OLAY 大紅瓶 乳霜', 'OLAY 超紅瓶 乳霜',
 ];
 
-export type BiggoItem = { platform: string; title: string; url: string; price: number; spec?: string };
+export type BiggoItem = { platform: string; title: string; url: string; price: number; spec?: string; promos: { text: string }[] };
 
 const decode = (s: string) =>
   s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -48,7 +48,17 @@ export function parseBiggo(html: string): BiggoItem[] {
     const main = c.match(/product-price[^"]*"[^>]*>([^<]+)</)?.[1] || '';
     const price = specPrice ?? (/~/.test(main) ? null : num(main));
     if (!price) continue;
-    out.push({ platform, title: specLabel ? `${title}（${specLabel}）` : title, url: canonicalUrl(platform, purl), price, spec: specLabel });
+    // 活動：卡片上的折扣標籤、價格變動，以及標題裡的優惠字樣
+    const promos: { text: string }[] = [];
+    const add = (t: string) => { t = t.trim(); if (t && !promos.some((p) => p.text === t)) promos.push({ text: t }); };
+    const texts = Array.from(c.matchAll(/>([^<>]{2,30})</g)).map((m) => decode(m[1]));
+    for (const t of texts) {
+      if (/^(滿\$?[\d,]+折\$?[\d,]+|折扣\$?[\d,]+|最高折\$?[\d,]+|\d+折|免運.*)$/.test(t.trim())) add(t);
+      const ch = t.match(/^(降價|漲價)\s*\$?([\d,]+)$/);
+      if (ch && ch[1] === '降價') add(`近期降價 $${ch[2]}`); // 漲價不算活動
+    }
+    for (const m of Array.from(title.matchAll(/買\d+送\d+|\d+入特惠組?|特惠組|限定包裝|限量版?|免運/g))) add(m[0]);
+    out.push({ platform, title: specLabel ? `${title}（${specLabel}）` : title, url: canonicalUrl(platform, purl), price, spec: specLabel, promos: promos.slice(0, 4) });
   }
   return out;
 }

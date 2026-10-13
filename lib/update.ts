@@ -1,7 +1,7 @@
 import { adminDb, todayTaipei } from './db';
 import { scrape } from './scrapers';
 import { classify } from './classify';
-import { BIGGO_QUERIES, searchBiggo } from './biggo';
+import { BIGGO_QUERIES, searchBiggo, type BiggoItem } from './biggo';
 
 // 抓取所有啟用中的商品頁並寫入當日價格
 export async function runUpdate(onlyIds?: number[]) {
@@ -47,7 +47,7 @@ export async function runUpdate(onlyIds?: number[]) {
 // 蝦皮商城、酷澎：從 BigGo 搜尋結果整批更新（搜尋同時進行、資料庫整批寫入，避免超過執行時間）
 export async function runBiggo(day: string) {
   const db = adminDb();
-  const found = new Map<string, { platform: string; title: string; url: string; price: number }>();
+  const found = new Map<string, BiggoItem>();
   let searchFailed = 0;
   const statuses: Record<string, number> = {};
   // 一次一個關鍵字、間隔 1.5 秒，失敗再等 3 秒重試一次，避免被 BigGo 當成大量請求擋掉
@@ -87,7 +87,7 @@ export async function runBiggo(day: string) {
     .filter(({ l }) => l && l.active) // 手動停用的不再追蹤
     .map(({ i, l }) => ({
       listing_id: l!.id, captured_on: day, captured_at: new Date().toISOString(), status: 'ok',
-      final_price: i.price, sale_price: i.price, promos: [], in_stock: true, error: '來源：BigGo',
+      final_price: i.price, sale_price: i.price, promos: i.promos, in_stock: true, error: '來源：BigGo',
     }));
   if (snaps.length) await db.from('ec_price_snapshots').upsert(snaps, { onConflict: 'listing_id,captured_on' });
   return { biggo_found: snaps.length, biggo_search_failed: searchFailed, biggo_status: statuses };
