@@ -19,7 +19,9 @@ export default async function Search({ searchParams }: { searchParams: { q?: str
   if (q) {
     const [m, b] = await Promise.all([
       searchMomo(q).catch(() => ({ status: 0, items: [] })),
-      searchBiggo(q, true).catch(() => ({ status: 0, items: [] })),
+      searchBiggo(q, true).catch(() => ({ status: 0, items: [] }))
+        // BigGo 偶爾因短時間請求太多而拒絕，等一秒半再試一次
+        .then((r) => r.status === 200 ? r : new Promise((ok) => setTimeout(ok, 1500)).then(() => searchBiggo(q, true)).catch(() => ({ status: 0, items: [] }))),
     ]);
     if (m.status !== 200) failed.push('momo');
     if (b.status !== 200) failed.push('蝦皮商城、酷澎等');

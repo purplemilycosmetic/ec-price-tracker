@@ -207,13 +207,30 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px
   .platforms { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
+  /* 比價表在手機改成每個規格一張：上面規格，下面三個平台並排 */
+  .table-wrap { background: transparent; border: 0; overflow: visible; }
+  .grid-table { min-width: 0; display: block; }
+  .grid-table thead { display: none; }
+  .grid-table tbody { display: grid; gap: 10px; }
+  .grid-table tr.row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
+  .grid-table tr.row > th { grid-column: 1 / -1; width: auto; border-bottom: 1px solid var(--rule); padding: 10px 12px; }
+  .grid-table tr.row > td { border-bottom: 0; padding: 8px 12px 12px; border-left: 1px solid var(--rule); }
+  .grid-table tr.row > td:nth-of-type(1) { border-left: 0; }
+  .grid-table tr.row > td::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .grid-table tr.detail { display: block; margin-top: -10px; }
+  .grid-table tr.detail > td { display: block; border: 1px solid var(--rule); border-top: 0; border-radius: 0 0 12px 12px; }
+  .grid-table tr.row.is-open { border-radius: 12px 12px 0 0; }
+  .price { font-size: 16px; }
+  .lowest { display: block; width: max-content; margin: 3px 0 0; }
+  .delta { margin-left: 4px; }
   .site-head-in { flex-wrap: wrap; gap: 10px 16px; }
   .search { order: 3; flex-basis: 100%; max-width: none; }
   .switcher { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero { grid-template-columns: 84px 1fr; }
   .hero-img { width: 84px; height: 84px; }
   .pages li { grid-template-columns: 40px 1fr auto; }
-  .pages .page-plat { display: none; }
+  .pages li { grid-template-columns: 40px 14px 1fr auto; }
+  .pages .page-plat { font-size: 0; }
   .result { grid-template-columns: 52px 1fr; }
   .result img, .noimg { width: 52px; height: 52px; }
   .result-side { grid-column: 2; flex-direction: row; align-items: center; justify-content: space-between; }

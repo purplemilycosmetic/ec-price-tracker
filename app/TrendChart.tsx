@@ -21,7 +21,7 @@ export default function TrendChart({ days, series }: { days: string[]; series: S
   const all = live.flatMap((s) => s.pts).filter((v): v is number => v != null);
   if (!all.length) return <div className="muted chart-empty">這個規格還沒有價格資料</div>;
 
-  const W = Math.max(300, width), H = W < 500 ? 220 : 260, L = 52, R = W < 500 ? 52 : 72, T = 16, B = 32;
+  const W = Math.max(300, width), H = W < 500 ? 220 : 260, L = 52, R = W < 500 ? 66 : 76, T = 16, B = 32;
   // 整齊的刻度：間距取 1/2/5 × 10^n
   const rawLo = Math.min(...all), rawHi = Math.max(...all);
   const span = Math.max(rawHi - rawLo, rawHi * 0.2, 20);

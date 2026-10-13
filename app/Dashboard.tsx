@@ -234,15 +234,15 @@ export default function Dashboard({ listings, snaps, events, officials, today }:
                         </span>
                       </th>
                       {cells.map(({ p, b, has }) => {
-                        if (!has) return <td key={p.key} className="na">未販售</td>;
+                        if (!has) return <td key={p.key} className="na" data-label={p.name}>未販售</td>;
                         if (!b) {
                           const st = ls.filter((l) => l.platform === p.key).map(latest).find(Boolean)?.status;
-                          return <td key={p.key} className="na">{STATUS[st ?? ''] ?? '今日無資料'}</td>;
+                          return <td key={p.key} className="na" data-label={p.name}>{STATUS[st ?? ''] ?? '今日無資料'}</td>;
                         }
                         const d = b.prev ? b.s.final_price! - b.prev.final_price! : 0;
                         const isLow = b.s.final_price === lowest && cells.filter((c) => c.b).length > 1;
                         return (
-                          <td key={p.key}>
+                          <td key={p.key} data-label={p.name}>
                             <a className={`num price ${isLow ? 'is-low' : ''}`} href={b.l.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
                               {fmt(b.s.final_price)}
                             </a>
