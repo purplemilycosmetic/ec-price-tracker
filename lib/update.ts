@@ -68,8 +68,8 @@ export async function runUpdate(onlyIds?: number[]) {
 export async function discoverMomo() {
   const db = adminDb();
   const rows: any[] = [];
-  for (const p of PRODUCTS) {
-    const { items } = await searchMomo(p.queries[0]).catch(() => ({ items: [] as any[] }));
+  for (const { p, q } of PRODUCTS.flatMap((p) => p.queries.map((q) => ({ p, q })))) {
+    const { items } = await searchMomo(q).catch(() => ({ items: [] as any[] }));
     for (const it of items) {
       const c = classify(it.title);
       if (c.line === p.key && !rows.some((r) => r.url === it.url))

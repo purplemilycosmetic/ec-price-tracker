@@ -4,7 +4,7 @@ export type Classified = { brand: string | null; line: string | null; spec: stri
 // 追蹤的產品（key 存在 ec_listings.line）。名稱以品牌官網的正式品名為準
 export type Product = {
   key: string; brand: string; name: string; short: string;
-  official?: { url: string; kind: 'avene' | 'ahc' };
+  official?: { url: string; kind: 'avene' | 'ahc'; imageHint?: RegExp }; // imageHint：官網頁面上產品包裝圖的檔名
   queries: string[]; // 每天在 BigGo 搜尋蝦皮商城、酷澎用的關鍵字
 };
 export const PRODUCTS: Product[] = [
@@ -12,10 +12,10 @@ export const PRODUCTS: Product[] = [
     official: { kind: 'avene', url: 'https://www.eau-thermale-avene.tw/p/ya-yang-shu-hu-huo-quan-shui-3282779003131-2d6dc250' },
     queries: ['雅漾 舒護活泉水', 'Avene 活泉水 300ml', 'Avene 活泉水 150ml', 'Avene 活泉水 50ml'] },
   { key: 'ahc-b5-serum', brand: 'AHC', name: '瞬效保濕B5微導玻尿酸精華液', short: 'B5微導玻尿酸精華',
-    official: { kind: 'ahc', url: 'https://tw.ahcbeauty.com/products/瞬效保濕b5玻尿酸精華液' },
+    official: { kind: 'ahc', url: 'https://tw.ahcbeauty.com/products/瞬效保濕b5玻尿酸精華液', imageHint: /B5_PREMIUM_EX_HYDRA_B5_SOOTHER_30ml_1\.png|B5_PREMIUM_HYDRA_B5_SOOTHER_30ml_OUTBOX_FRONT/ },
     queries: ['AHC 瞬效保濕B5微導玻尿酸精華', 'AHC B5 玻尿酸精華 30ml'] },
   { key: 'ahc-aqualuronic-serum', brand: 'AHC', name: '醫美科研超導水光玻尿酸精華', short: '超導水光玻尿酸精華',
-    official: { kind: 'ahc', url: 'https://tw.ahcbeauty.com/products/ahc-醫美科研超導水光玻尿酸精華' },
+    official: { kind: 'ahc', url: 'https://tw.ahcbeauty.com/products/ahc-醫美科研超導水光玻尿酸精華', imageHint: /HYALURO-DEEP_VOLUME_5_INTRA-SERUM_40ML_PACK_SHOT\.(png|jpg)/ },
     queries: ['AHC 超導水光玻尿酸精華', 'AHC 水光玻尿酸精華 40ml'] },
   { key: 'olay-regenerist-cream', brand: 'OLAY', name: '新生高效緊緻護膚霜（大紅瓶）', short: '大紅瓶護膚霜',
     queries: ['OLAY 新生高效緊緻護膚霜', 'OLAY 大紅瓶 乳霜 50g'] },

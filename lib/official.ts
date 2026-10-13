@@ -38,7 +38,12 @@ export async function fetchOfficial(p: Product): Promise<OfficialInfo | null> {
   name ||= decode(html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/)?.[1] || '') || null;
   const og = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/)?.[1];
   if (!image && og && !/no-image/.test(og)) image = decode(og).replace(/^\/\//, 'https://');
-  if (p.official.kind === 'ahc') {
+  if (p.official.imageHint) {
+    const imgs = Array.from(html.matchAll(/((?:https?:)?\/\/[^"' )]+\.(?:png|jpg|jpeg|webp))/gi)).map((m) => m[1]);
+    const hit = imgs.find((u) => p.official!.imageHint!.test(u));
+    if (hit) image = hit.replace(/^\/\//, 'https://');
+  }
+  if (p.official.kind === 'ahc' && !image) {
     // Shopify 商品資料：正式品名與主圖
     try {
       const j = JSON.parse((await get(p.official.url + '.js')).text);
