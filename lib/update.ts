@@ -9,13 +9,18 @@ import { fetchNews } from './news';
 // 抓取所有啟用中的商品頁並寫入當日價格
 export async function runUpdate(onlyIds?: number[]) {
   const db = adminDb();
-  const discovered = onlyIds?.length ? 0 : await discoverMomo().catch(() => 0);
+  const full = !onlyIds?.length;
+  const day = todayTaipei();
+  // 蝦皮／酷澎、新聞、官網和 momo 搜尋同時進行，總時間才不會超過 Vercel 的 60 秒上限
+  const biggo = full ? runBiggo(day).catch((e) => ({ biggo_error: String(e) })) : Promise.resolve({});
+  const news = full ? runNews(day).catch((e) => ({ news_error: String(e) })) : Promise.resolve({});
+  const official = full ? runOfficial().catch((e) => ({ official_error: String(e) })) : Promise.resolve({});
+  const discovered = full ? await discoverMomo().catch(() => 0) : 0;
   let q = db.from('ec_listings').select('*').eq('active', true).not('platform', 'in', '(shopee,coupang)');
   if (onlyIds?.length) q = q.in('id', onlyIds);
   const { data: listings, error } = await q;
   if (error) throw error;
 
-  const day = todayTaipei();
   const summary = { total: listings!.length, ok: 0, blocked: 0, failed: 0, deactivated: 0, momo_new_found: discovered };
   const queue = [...listings!];
   const banners: { href: string; src: string }[] = [];
@@ -49,10 +54,6 @@ export async function runUpdate(onlyIds?: number[]) {
       await new Promise((res) => setTimeout(res, 200)); // 放慢速度，避免對平台造成負擔
     }
   }
-  const full = !onlyIds?.length;
-  const biggo = full ? runBiggo(day).catch((e) => ({ biggo_error: String(e) })) : Promise.resolve({});
-  const news = full ? runNews(day).catch((e) => ({ news_error: String(e) })) : Promise.resolve({});
-  const official = full ? runOfficial().catch((e) => ({ official_error: String(e) })) : Promise.resolve({});
   await Promise.all([worker(), worker(), worker(), worker()]);
   if (banners.length) {
     await db.from('ec_platform_events').upsert(
@@ -68,8 +69,13 @@ export async function runUpdate(onlyIds?: number[]) {
 export async function discoverMomo() {
   const db = adminDb();
   const rows: any[] = [];
-  for (const { p, q } of PRODUCTS.flatMap((p) => p.queries.map((q) => ({ p, q })))) {
-    const { items } = await searchMomo(q).catch(() => ({ items: [] as any[] }));
+  const jobs = PRODUCTS.flatMap((p) => p.queries.map((q) => ({ p, q })));
+  // 同時搜尋（間隔 250ms 錯開），避免拖長整體執行時間
+  const results = await Promise.all(jobs.map(({ q }, i) =>
+    new Promise((r) => setTimeout(r, i * 250)).then(() => searchMomo(q)).catch(() => ({ items: [] as any[] }))));
+  for (let i = 0; i < results.length; i++) {
+    const { items } = results[i];
+    const p = jobs[i].p;
     for (const it of items) {
       const c = classify(it.title);
       if (c.line === p.key && !rows.some((r) => r.url === it.url))
