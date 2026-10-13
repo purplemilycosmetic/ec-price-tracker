@@ -1,5 +1,5 @@
 -- 初始 momo 商品頁（非追蹤品項會在第一次抓取時自動停用）
-insert into listings (platform, url) values
+insert into ec_listings (platform, url) values
   ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=7493417'),
   ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=7903701'),
   ('momo','https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=9258336'),

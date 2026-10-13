@@ -8,8 +8,8 @@ export default async function Page() {
   const db = adminDb();
   const since = new Date(Date.now() + 8 * 3600_000 - 45 * 86400_000).toISOString().slice(0, 10);
   const [{ data: listings }, { data: snaps }] = await Promise.all([
-    db.from('listings').select('id,brand,line,spec,platform,url,title').eq('active', true),
-    db.from('price_snapshots')
+    db.from('ec_listings').select('id,brand,line,spec,platform,url,title').eq('active', true),
+    db.from('ec_price_snapshots')
       .select('listing_id,captured_on,status,list_price,sale_price,final_price,promos,in_stock,error')
       .gte('captured_on', since).order('captured_on'),
   ]);

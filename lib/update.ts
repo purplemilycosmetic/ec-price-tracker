@@ -5,7 +5,7 @@ import { classify } from './classify';
 // 抓取所有啟用中的商品頁並寫入當日價格
 export async function runUpdate(onlyIds?: number[]) {
   const db = adminDb();
-  let q = db.from('listings').select('*').eq('active', true);
+  let q = db.from('ec_listings').select('*').eq('active', true);
   if (onlyIds?.length) q = q.in('id', onlyIds);
   const { data: listings, error } = await q;
   if (error) throw error;
@@ -23,9 +23,9 @@ export async function runUpdate(onlyIds?: number[]) {
         const patch: any = { title: r.title, spec: l.spec || c.spec, brand: l.brand || c.brand, line: l.line || c.line };
         // 種子清單中不屬於追蹤品項的商品（例如防曬）自動停用
         if (!l.brand && !l.line && (!c.brand || !c.line)) { patch.active = false; summary.deactivated++; }
-        await db.from('listings').update(patch).eq('id', l.id);
+        await db.from('ec_listings').update(patch).eq('id', l.id);
       }
-      await db.from('price_snapshots').upsert(
+      await db.from('ec_price_snapshots').upsert(
         {
           listing_id: l.id, captured_on: day, captured_at: new Date().toISOString(), status: r.status,
           list_price: r.list_price ?? null, sale_price: r.sale_price ?? null, final_price: r.final_price ?? null,
