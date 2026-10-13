@@ -21,7 +21,7 @@ export async function runUpdate(onlyIds?: number[]) {
     while (queue.length) {
       const l = queue.shift()!;
       const r = await scrape(l.platform, l.url);
-      if (r.title) {
+      if (r.title && r.status === 'ok') {
         const c = classify(r.title);
         const patch: any = { title: r.title, spec: c.spec ?? l.spec, brand: l.brand || c.brand, line: l.line || c.line, image_url: r.image ?? l.image_url };
         // 種子清單中不屬於追蹤品項的商品（例如防曬）自動停用

@@ -74,6 +74,8 @@ export async function scrapeMomo(url: string): Promise<ScrapeResult> {
   const text = htmlToText(html);
   const title = (meta(html, 'og:title') || html.match(/<title>([^<]*)<\/title>/i)?.[1] || '').replace(/\s*-\s*momo購物網.*$/, '').trim();
   if (!title || /商品已下架|查無此商品/.test(text)) return { status: 'not_found', title };
+  // momo 偶爾回傳系統訊息頁（標題像「momo購物網 -- Mobile管理訊息」），當作暫時失敗、不覆蓋商品資料
+  if (/管理訊息|系統訊息|^momo購物網\s*--/.test(title)) return { status: 'error', error: 'momo 回傳系統訊息頁' };
 
   const after = (label: string) => num(text.match(new RegExp(`${label}\\s*\\n?\\s*\\$?\\s*\\n?\\s*([\\d,]+)`))?.[1]);
   const list_price = after('市售價');
@@ -100,6 +102,7 @@ export async function scrapeMomo(url: string): Promise<ScrapeResult> {
       promos.push({ text: l });
     }
   }
+  if (!final_price) return { status: 'error', title, error: '頁面上找不到價格' };
   const in_stock = !/已售完|補貨中|銷售一空/.test(text.slice(0, 20000));
   const image = meta(html, 'og:image');
   // 商品頁上的「銀行優惠活動」輪播，是全站共用的刷卡／支付優惠
