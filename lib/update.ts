@@ -49,8 +49,18 @@ export async function runBiggo(day: string) {
   const db = adminDb();
   const found = new Map<string, { platform: string; title: string; url: string; price: number }>();
   let searchFailed = 0;
-  const results = await Promise.all(BIGGO_QUERIES.map((q, i) =>
-    new Promise((res) => setTimeout(res, i * 150)).then(() => searchBiggo(q)).catch(() => ({ status: 0, items: [] as any[] }))));
+  const statuses: Record<string, number> = {};
+  // 一次一個關鍵字、間隔 1.5 秒，失敗再等 3 秒重試一次，避免被 BigGo 當成大量請求擋掉
+  const results: { status: number; items: any[] }[] = [];
+  const t0 = Date.now();
+  for (const q of BIGGO_QUERIES) {
+    if (Date.now() - t0 > 45000) break; // 保留時間給資料庫寫入
+    let r = await searchBiggo(q).catch((e) => ({ status: -1, items: [] as any[], err: String(e) }));
+    if (r.status !== 200 && Date.now() - t0 < 25000) { await new Promise((res) => setTimeout(res, 3000)); r = await searchBiggo(q).catch(() => ({ status: -1, items: [] as any[] })); }
+    statuses[r.status] = (statuses[r.status] || 0) + 1;
+    results.push(r);
+    await new Promise((res) => setTimeout(res, 1500));
+  }
   for (const { status, items } of results) {
     if (status !== 200) searchFailed++;
     for (const it of items) {
@@ -62,7 +72,7 @@ export async function runBiggo(day: string) {
     }
   }
   const items = Array.from(found.values());
-  if (!items.length) return { biggo_found: 0, biggo_search_failed: searchFailed };
+  if (!items.length) return { biggo_found: 0, biggo_search_failed: searchFailed, biggo_status: statuses };
 
   // 新商品加入、既有商品更新標題與規格（不會動到手動停用的設定）
   const rows = items.map((i) => {
@@ -80,5 +90,5 @@ export async function runBiggo(day: string) {
       final_price: i.price, sale_price: i.price, promos: [], in_stock: true, error: '來源：BigGo',
     }));
   if (snaps.length) await db.from('ec_price_snapshots').upsert(snaps, { onConflict: 'listing_id,captured_on' });
-  return { biggo_found: snaps.length, biggo_search_failed: searchFailed };
+  return { biggo_found: snaps.length, biggo_search_failed: searchFailed, biggo_status: statuses };
 }
