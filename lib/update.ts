@@ -64,16 +64,14 @@ export async function runBiggo(day: string) {
   const items = Array.from(found.values());
   if (!items.length) return { biggo_found: 0, biggo_search_failed: searchFailed };
 
-  const { data: existing } = await db.from('ec_listings').select('id,url,active').in('url', items.map((i) => i.url));
-  const byUrl = new Map((existing || []).map((e) => [e.url, e]));
-  const fresh = items.filter((i) => !byUrl.has(i.url)).map((i) => {
+  // 新商品加入、既有商品更新標題與規格（不會動到手動停用的設定）
+  const rows = items.map((i) => {
     const c = classify(i.title);
     return { platform: i.platform, url: i.url, title: i.title, brand: c.brand, line: c.line, spec: c.spec };
   });
-  if (fresh.length) {
-    const { data } = await db.from('ec_listings').insert(fresh).select('id,url,active');
-    for (const d of data || []) byUrl.set(d.url, d);
-  }
+  const { data: saved, error } = await db.from('ec_listings').upsert(rows, { onConflict: 'url' }).select('id,url,active');
+  if (error) throw error;
+  const byUrl = new Map((saved || []).map((e) => [e.url, e]));
   const snaps = items
     .map((i) => ({ i, l: byUrl.get(i.url) }))
     .filter(({ l }) => l && l.active) // 手動停用的不再追蹤
