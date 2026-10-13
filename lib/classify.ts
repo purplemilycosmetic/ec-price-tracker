@@ -9,7 +9,7 @@ export const LINES: { brand: string; line: string }[] = [
 ];
 
 export function classify(title: string): Classified {
-  const t = title || '';
+  const t = normalize(title);
   let brand: string | null = null;
   if (/雅漾|av[eè]ne/i.test(t)) brand = '雅漾 Avène';
   else if (/\bAHC\b/i.test(t)) brand = 'AHC';
@@ -30,15 +30,37 @@ export function classify(title: string): Classified {
   return { brand, line, spec: parseSpec(t) };
 }
 
-export function parseSpec(t: string): string | null {
-  // 組合包，例如 300mlx1+150mlx2
+const CN: Record<string, string> = { 一: '1', 二: '2', 兩: '2', 三: '3', 四: '4', 五: '5', 六: '6', 七: '7', 八: '8', 九: '9', 十: '10' };
+export function normalize(t: string) {
+  return (t || '').normalize('NFKC').replace(/([一二兩三四五六七八九十])\s*(入|瓶|罐|件)/g, (_, c, u) => CN[c] + u);
+}
+
+function volOf(t: string) {
+  const m = t.match(/(\d+(?:\.\d+)?)\s*(ml|g)(?![a-wyz])/i);
+  return m ? { text: `${m[1]}${m[2].toLowerCase()}`, end: (m.index ?? 0) + m[0].length } : null;
+}
+function multOf(t: string, from = 0) {
+  const after = t.slice(from, from + 8).match(/^\s*[x×X＊*✖]\s*(\d+)/);
+  const m = after || t.match(/(\d+)\s*(?:入|瓶|罐)(?:組)?/) || t.match(/[x×X＊*✖]\s*(\d+)\s*\(?瓶/);
+  return m && +m[1] > 1 ? +m[1] : null;
+}
+
+// 規格：容量 + 入數。標題結尾括號是平台上選的規格（例如蝦皮「（3入組_買3送3）」），優先採用
+export function parseSpec(raw: string): string | null {
+  const t = normalize(raw);
   const combo = t.match(/\d+\s*(?:ml|g)\s*(?:[x×X＊*]\s*\d+)?(?:\s*\+\s*\d+\s*(?:ml|g)\s*(?:[x×X＊*]\s*\d+)?)+/i);
+  // NFKC 會把全形括號轉成半形，所以兩種都比對；括號內沒有容量或入數就忽略（例如「(化妝水/噴霧)」）
+  const vm = t.match(/[（(]([^（）()]*)[）)]\s*$/);
+  const variant = vm && !/^\s*(送|贈|加贈)/.test(vm[1]) && (volOf(vm[1]) || /\d+\s*(入|瓶|罐|件)/.test(vm[1])) ? vm[1] : null;
+  if (variant && vm) {
+    const v = volOf(variant);
+    const base = v || volOf(t.slice(0, vm.index));
+    const mult = multOf(variant, v?.end ?? 0);
+    if (base) return base.text + (mult ? ` ×${mult}` : '');
+  }
   if (combo) return '組合 ' + combo[0].replace(/\s/g, '').replace(/[xX＊*]/g, '×').replace(/×1(?!\d)/g, '').toLowerCase();
-  const vol = t.match(/(\d+(?:\.\d+)?)\s*(ml|g)(?![a-wyz])/i);
-  if (!vol) { const n = t.match(/(\d+)\s*入/); return n ? `${n[1]}入組（未標容量）` : null; }
-  let spec = `${vol[1]}${vol[2].toLowerCase()}`;
-  const after = t.slice((vol.index ?? 0) + vol[0].length, (vol.index ?? 0) + vol[0].length + 8);
-  const mult = after.match(/^\s*[x×X＊*]\s*(\d+)/) || t.match(/(\d+)\s*入(?:組)?/);
-  if (mult && +mult[1] > 1) spec += ` ×${mult[1]}`;
-  return spec;
+  const v = volOf(t);
+  if (!v) { const n = t.match(/(\d+)\s*入/); return n ? `${n[1]}入組（未標容量）` : null; }
+  const mult = multOf(t, v.end);
+  return v.text + (mult ? ` ×${mult}` : '');
 }
