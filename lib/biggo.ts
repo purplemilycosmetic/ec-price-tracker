@@ -7,14 +7,14 @@ export const BIGGO_STORES: Record<string, string> = {
   tw_pec_coupang: 'coupang',
 };
 
-// 每天用這些關鍵字搜尋
-export const BIGGO_QUERIES = [
-  '雅漾 活泉水', 'Avene 活泉水 300ml', 'Avene 活泉水 150ml', 'Avene 活泉水 50ml',
-  'AHC 精華', 'AHC 玻尿酸精華', 'AHC B5 精華', 'AHC 原液',
-  'OLAY 乳霜', 'OLAY 大紅瓶 乳霜', 'OLAY 超紅瓶 乳霜',
-];
+import { PRODUCTS } from './classify';
+// 每天用這些關鍵字搜尋（自行搜尋加入的關鍵字另外存在 ec_watch_queries）
+export const BIGGO_QUERIES = PRODUCTS.flatMap((p) => p.queries);
 
-export type BiggoItem = { platform: string; title: string; url: string; price: number; spec?: string; promos: { text: string }[]; image?: string | null };
+// 搜尋頁會顯示所有商店；每日追蹤只存蝦皮商城、酷澎（momo 直接抓商品頁）
+const STORE_PLATFORM: Record<string, string> = { ...BIGGO_STORES, tw_ec_pchome24h: 'pchome' };
+
+export type BiggoItem = { store: string; storeName: string; platform: string; title: string; url: string; price: number; spec?: string; promos: { text: string }[]; image?: string | null };
 
 const decode = (s: string) =>
   s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -32,13 +32,15 @@ function canonicalUrl(platform: string, purl: string) {
   return purl.split('?')[0];
 }
 
-export function parseBiggo(html: string): BiggoItem[] {
+export function parseBiggo(html: string, allStores = false): BiggoItem[] {
   const out: BiggoItem[] = [];
   const cards = html.split(/ProductItemListPC_product-item-list-PC/).slice(1);
   for (const c of cards) {
     const store = c.match(/\/r\/\?i=([a-z0-9_]+)/)?.[1];
-    const platform = store && BIGGO_STORES[store];
+    if (!store) continue;
+    const platform = allStores ? STORE_PLATFORM[store] || 'other' : BIGGO_STORES[store];
     if (!platform) continue;
+    const storeName = decode(c.match(/StoreName_store[^>]*>(?:[\s\S]*?)<span>([^<]+)<\/span>/)?.[1] || store);
     const title = decode(c.match(/title="([^"]+)"/)?.[1] || '');
     const purlRaw = c.match(/purl=([^&"]+)/)?.[1];
     if (!title || !purlRaw) continue;
@@ -59,16 +61,16 @@ export function parseBiggo(html: string): BiggoItem[] {
     }
     for (const m of Array.from(title.matchAll(/買\d+送\d+|\d+入特惠組?|特惠組|限定包裝|限量版?|免運/g))) add(m[0]);
     const image = c.match(/ProductImage[\s\S]*?<img[^>]*src="(https:\/\/[^"]+)"/)?.[1] || null;
-    out.push({ image: image && decode(image), platform, title: specLabel ? `${title}（${specLabel}）` : title, url: canonicalUrl(platform, purl), price, spec: specLabel, promos: promos.slice(0, 4) });
+    out.push({ store, storeName, image: image && decode(image), platform, title: specLabel ? `${title}（${specLabel}）` : title, url: canonicalUrl(platform, purl), price, spec: specLabel, promos: promos.slice(0, 4) });
   }
   return out;
 }
 
-export async function searchBiggo(q: string): Promise<{ status: number; items: BiggoItem[] }> {
+export async function searchBiggo(q: string, allStores = false): Promise<{ status: number; items: BiggoItem[] }> {
   const r = await fetch(`https://biggo.com.tw/s/${encodeURIComponent(q)}/`, {
     headers: { 'User-Agent': UA, 'Accept-Language': 'zh-TW,zh;q=0.9', Accept: 'text/html' },
     cache: 'no-store',
   });
   const html = await r.text();
-  return { status: r.status, items: r.ok ? parseBiggo(html) : [] };
+  return { status: r.status, items: r.ok ? parseBiggo(html, allStores) : [] };
 }

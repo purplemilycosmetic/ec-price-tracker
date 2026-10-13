@@ -1,12 +1,29 @@
 // 依商品標題自動判斷品牌、品項、規格
 export type Classified = { brand: string | null; line: string | null; spec: string | null };
 
-export const LINES: { brand: string; line: string }[] = [
-  { brand: '雅漾 Avène', line: '活泉水噴霧' },
-  { brand: 'AHC', line: '精華液' },
-  { brand: 'AHC', line: '原液' },
-  { brand: 'OLAY', line: '乳霜' },
+// 追蹤的產品（key 存在 ec_listings.line）。名稱以品牌官網的正式品名為準
+export type Product = {
+  key: string; brand: string; name: string; short: string;
+  official?: { url: string; kind: 'avene' | 'ahc' };
+  queries: string[]; // 每天在 BigGo 搜尋蝦皮商城、酷澎用的關鍵字
+};
+export const PRODUCTS: Product[] = [
+  { key: 'avene-thermal-water', brand: '雅漾 Avène', name: '雅漾舒護活泉水', short: '舒護活泉水',
+    official: { kind: 'avene', url: 'https://www.eau-thermale-avene.tw/p/ya-yang-shu-hu-huo-quan-shui-3282779003131-2d6dc250' },
+    queries: ['雅漾 舒護活泉水', 'Avene 活泉水 300ml', 'Avene 活泉水 150ml', 'Avene 活泉水 50ml'] },
+  { key: 'ahc-b5-serum', brand: 'AHC', name: '瞬效保濕B5微導玻尿酸精華液', short: 'B5微導玻尿酸精華',
+    official: { kind: 'ahc', url: 'https://tw.ahcbeauty.com/products/瞬效保濕b5玻尿酸精華液' },
+    queries: ['AHC 瞬效保濕B5微導玻尿酸精華', 'AHC B5 玻尿酸精華 30ml'] },
+  { key: 'ahc-aqualuronic-serum', brand: 'AHC', name: '醫美科研超導水光玻尿酸精華', short: '超導水光玻尿酸精華',
+    official: { kind: 'ahc', url: 'https://tw.ahcbeauty.com/products/ahc-醫美科研超導水光玻尿酸精華' },
+    queries: ['AHC 超導水光玻尿酸精華', 'AHC 水光玻尿酸精華 40ml'] },
+  { key: 'olay-regenerist-cream', brand: 'OLAY', name: '新生高效緊緻護膚霜（大紅瓶）', short: '大紅瓶護膚霜',
+    queries: ['OLAY 新生高效緊緻護膚霜', 'OLAY 大紅瓶 乳霜 50g'] },
+  { key: 'olay-peptide-cream', brand: 'OLAY', name: '胜肽超紅瓶緊緻乳霜', short: '胜肽超紅瓶乳霜',
+    queries: ['OLAY 胜肽 超紅瓶 乳霜', 'OLAY 胜肽專研緊緻乳霜'] },
 ];
+export const CUSTOM = 'custom'; // 自行搜尋加入的商品
+export const productOf = (key: string | null) => PRODUCTS.find((p) => p.key === key);
 
 export function classify(title: string): Classified {
   const t = normalize(title);
@@ -20,12 +37,15 @@ export function classify(title: string): Classified {
     // 主商品要是活泉水：「精華霜 送活泉水(小)」這種贈品組不算
     const i = t.search(/活泉水|噴霧/);
     const other = t.search(/霜|精華|精萃|乳|凝膠|面膜|眼|卸妝|潔膚|防曬|洗/);
-    if (i >= 0 && (other < 0 || i < other)) line = '活泉水噴霧';
+    if (i >= 0 && (other < 0 || i < other) && !/保濕化妝水(?!\/)|柔潤|潤澤化妝水/.test(t.slice(0, i))) line = 'avene-thermal-water';
   } else if (brand === 'AHC') {
-    if (/原液/.test(t)) line = '原液';
-    else if (/精華|安瓶|精萃/.test(t) && !/精華水|精華乳|化妝水|霜|防曬|面膜|眼/.test(t)) line = '精華液';
+    const noise = /精華水|精華乳|水乳|乳液|化妝水|潔顏|霜|露|面膜|眼|機能水|男士|防曬/;
+    if (/B5/i.test(t) && /玻尿酸/.test(t) && /精華/.test(t) && !/超導水光|能量修護/.test(t) && !noise.test(t)) line = 'ahc-b5-serum';
+    else if (/超導水光|水光玻尿酸/.test(t) && /精華/.test(t) && !noise.test(t)) line = 'ahc-aqualuronic-serum';
   } else if (brand === 'OLAY') {
-    if (/霜/.test(t) && !/眼霜|防曬|CC|BB|乳液/.test(t)) line = '乳霜';
+    const cream = /乳霜|護膚霜|面霜|緊緻霜|凝霜/.test(t) && !/眼霜|防曬|CC|BB/.test(t);
+    if (cream && /胜肽|超紅瓶/.test(t)) line = 'olay-peptide-cream';
+    else if (cream && /新生高效|大紅瓶/.test(t)) line = 'olay-regenerist-cream';
   }
   return { brand, line, spec: parseSpec(t) };
 }

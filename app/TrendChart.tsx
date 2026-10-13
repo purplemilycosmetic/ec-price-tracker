@@ -71,7 +71,7 @@ export default function TrendChart({ days, series }: { days: string[]; series: S
             <g key={s.key}>
               <path d={d} fill="none" stroke={`var(--${s.key})`} strokeWidth={2} strokeLinejoin="round" />
               {s.pts.map((v, i) => v != null && (
-                <circle key={i} cx={x(i)} cy={y(v)} r={hover === i ? 5 : 4} fill={`var(--${s.key})`} stroke="var(--card)" strokeWidth={2} />
+                <circle key={i} cx={x(i)} cy={y(v)} r={hover === i ? 5 : 4} fill={`var(--${s.key})`} stroke="var(--surface)" strokeWidth={2} />
               ))}
             </g>
           );
@@ -96,7 +96,7 @@ export default function TrendChart({ days, series }: { days: string[]; series: S
           </span>
         ))}
       </div>
-      {n <= 1 && <div className="muted" style={{ marginTop: 4 }}>目前只有 1 天資料，之後每天 09:00 會多一個點，連成趨勢線。</div>}
+      {n <= 1 && <div className="muted" style={{ marginTop: 4 }}>目前只有 1 天的資料。每天 09:00 會多一個點，累積幾天後就能看出漲跌。</div>}
       <details className="tableview">
         <summary>以表格檢視</summary>
         <table>

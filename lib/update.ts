@@ -1,19 +1,22 @@
 import { adminDb, todayTaipei } from './db';
 import { scrape } from './scrapers';
-import { classify } from './classify';
+import { classify, CUSTOM, PRODUCTS } from './classify';
+import { searchMomo } from './momoSearch';
+import { fetchAllOfficial } from './official';
 import { BIGGO_QUERIES, searchBiggo, type BiggoItem } from './biggo';
 import { fetchNews } from './news';
 
 // 抓取所有啟用中的商品頁並寫入當日價格
 export async function runUpdate(onlyIds?: number[]) {
   const db = adminDb();
+  const discovered = onlyIds?.length ? 0 : await discoverMomo().catch(() => 0);
   let q = db.from('ec_listings').select('*').eq('active', true).not('platform', 'in', '(shopee,coupang)');
   if (onlyIds?.length) q = q.in('id', onlyIds);
   const { data: listings, error } = await q;
   if (error) throw error;
 
   const day = todayTaipei();
-  const summary = { total: listings!.length, ok: 0, blocked: 0, failed: 0, deactivated: 0 };
+  const summary = { total: listings!.length, ok: 0, blocked: 0, failed: 0, deactivated: 0, momo_new_found: discovered };
   const queue = [...listings!];
   const banners: { href: string; src: string }[] = [];
 
@@ -23,9 +26,14 @@ export async function runUpdate(onlyIds?: number[]) {
       const r = await scrape(l.platform, l.url);
       if (r.title && r.status === 'ok') {
         const c = classify(r.title);
-        const patch: any = { title: r.title, spec: c.spec ?? l.spec, brand: l.brand || c.brand, line: l.line || c.line, image_url: r.image ?? l.image_url };
-        // 種子清單中不屬於追蹤品項的商品（例如防曬）自動停用
-        if (!l.brand && !l.line && (!c.brand || !c.line)) { patch.active = false; summary.deactivated++; }
+        const custom = l.line === CUSTOM;
+        const patch: any = { title: r.title, spec: c.spec ?? l.spec, image_url: r.image ?? l.image_url };
+        if (!custom) {
+          // 每次都依最新的產品定義重新分類；不屬於追蹤產品的商品頁（例如防曬）自動停用
+          if (c.line) { patch.brand = c.brand; patch.line = c.line; }
+          else if (l.line == null) patch.line = CUSTOM; // 剛加入、不屬於預設產品 → 自訂追蹤
+          else { patch.active = false; summary.deactivated++; } // 原本屬於某產品、現在對不上 → 停用
+        }
         await db.from('ec_listings').update(patch).eq('id', l.id);
       }
       await db.from('ec_price_snapshots').upsert(
@@ -44,6 +52,7 @@ export async function runUpdate(onlyIds?: number[]) {
   const full = !onlyIds?.length;
   const biggo = full ? runBiggo(day).catch((e) => ({ biggo_error: String(e) })) : Promise.resolve({});
   const news = full ? runNews(day).catch((e) => ({ news_error: String(e) })) : Promise.resolve({});
+  const official = full ? runOfficial().catch((e) => ({ official_error: String(e) })) : Promise.resolve({});
   await Promise.all([worker(), worker(), worker(), worker()]);
   if (banners.length) {
     await db.from('ec_platform_events').upsert(
@@ -51,8 +60,40 @@ export async function runUpdate(onlyIds?: number[]) {
       { onConflict: 'platform,url' },
     );
   }
-  Object.assign(summary, { momo_bank_banners: banners.length }, await biggo, await news);
+  Object.assign(summary, { momo_bank_banners: banners.length }, await biggo, await news, await official);
   return summary;
+}
+
+// momo：每天用產品關鍵字搜尋，找到的新規格／新組合自動加入追蹤
+export async function discoverMomo() {
+  const db = adminDb();
+  const rows: any[] = [];
+  for (const p of PRODUCTS) {
+    const { items } = await searchMomo(p.queries[0]).catch(() => ({ items: [] as any[] }));
+    for (const it of items) {
+      const c = classify(it.title);
+      if (c.line === p.key && !rows.some((r) => r.url === it.url))
+        rows.push({ platform: 'momo', url: it.url, title: it.title, brand: c.brand, line: c.line, spec: c.spec, image_url: it.image });
+    }
+  }
+  if (!rows.length) return 0;
+  const { data } = await db.from('ec_listings').upsert(rows, { onConflict: 'url', ignoreDuplicates: true }).select('id');
+  return data?.length ?? 0;
+}
+
+// 品牌官網：正式品名、官方圖片、授權通路；官網列出的 momo 商品頁自動加入追蹤
+export async function runOfficial() {
+  const db = adminDb();
+  const infos = await fetchAllOfficial();
+  if (infos.length) await db.from('ec_products').upsert(infos.map((i) => ({ ...i, updated_at: new Date().toISOString() })), { onConflict: 'key' });
+  const momo = infos.flatMap((i) => i.channels.filter((c) => c.name === 'momo').map((c) => ({ key: i.key, code: c.url.match(/i_code=(\d+)/)?.[1] })))
+    .filter((m) => m.code);
+  if (momo.length)
+    await db.from('ec_listings').upsert(
+      momo.map((m) => ({ platform: 'momo', url: `https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=${m.code}`, line: m.key })),
+      { onConflict: 'url', ignoreDuplicates: true },
+    );
+  return { official_products: infos.length, official_momo_links: momo.length };
 }
 
 // 平台大型活動新聞
@@ -75,7 +116,14 @@ export async function runBiggo(day: string) {
   // 一次一個關鍵字、間隔 1.5 秒，失敗再等 3 秒重試一次，避免被 BigGo 當成大量請求擋掉
   const results: { status: number; items: any[] }[] = [];
   const t0 = Date.now();
-  for (const q of BIGGO_QUERIES) {
+  // 自行搜尋加入追蹤的商品：用當初的關鍵字每天再搜一次，依網址對回
+  const [{ data: watch }, { data: customs }] = await Promise.all([
+    db.from('ec_watch_queries').select('query'),
+    db.from('ec_listings').select('url').eq('line', CUSTOM).eq('active', true).in('platform', ['shopee', 'coupang']),
+  ]);
+  const customUrls = new Set((customs || []).map((c) => c.url));
+  const queries = Array.from(new Set([...BIGGO_QUERIES, ...(watch || []).map((w) => w.query)]));
+  for (const q of queries) {
     if (Date.now() - t0 > 45000) break; // 保留時間給資料庫寫入
     let r = await searchBiggo(q).catch((e) => ({ status: -1, items: [] as any[], err: String(e) }));
     if (r.status !== 200 && Date.now() - t0 < 25000) { await new Promise((res) => setTimeout(res, 3000)); r = await searchBiggo(q).catch(() => ({ status: -1, items: [] as any[] })); }
@@ -87,7 +135,7 @@ export async function runBiggo(day: string) {
     if (status !== 200) searchFailed++;
     for (const it of items) {
       const c = classify(it.title);
-      if (!c.brand || !c.line) continue; // 只留追蹤中的品項
+      if (!c.line && !customUrls.has(it.url)) continue; // 只留追蹤中的產品
       if (/非賣品|贈品|請勿下單|兌換|0元加購/.test(it.title) || it.price >= 9999) continue; // 贈品、佔位商品
       const prev = found.get(it.url);
       if (!prev || it.price < prev.price) found.set(it.url, it);
@@ -99,7 +147,8 @@ export async function runBiggo(day: string) {
   // 新商品加入、既有商品更新標題與規格（不會動到手動停用的設定）
   const rows = items.map((i) => {
     const c = classify(i.title);
-    return { platform: i.platform, url: i.url, title: i.title, brand: c.brand, line: c.line, spec: c.spec, image_url: i.image ?? null };
+    const custom = customUrls.has(i.url) && !c.line;
+    return { platform: i.platform, url: i.url, title: i.title, brand: custom ? undefined : c.brand, line: custom ? CUSTOM : c.line, spec: c.spec, image_url: i.image ?? null };
   });
   const { data: saved, error } = await db.from('ec_listings').upsert(rows, { onConflict: 'url' }).select('id,url,active');
   if (error) throw error;

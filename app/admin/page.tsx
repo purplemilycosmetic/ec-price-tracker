@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { LINES } from '@/lib/classify';
+import { PRODUCTS } from '@/lib/classify';
 
 export default function Admin() {
   const [key, setKey] = useState('');
@@ -11,10 +11,10 @@ export default function Admin() {
 
   async function submit() {
     setBusy(true); setMsg('新增中並立即抓取一次…');
-    const sel = LINES[+line];
+    const sel = PRODUCTS[+line];
     const r = await fetch('/api/listings', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, urls, brand: line ? sel.brand : null, line: line ? sel.line : null }),
+      body: JSON.stringify({ key, urls, line: line ? sel.key : null }),
     });
     const j = await r.json();
     setBusy(false);
@@ -33,7 +33,7 @@ export default function Admin() {
       <label>品項（留空＝依標題自動判斷）</label>
       <select value={line} onChange={(e) => setLine(e.target.value)}>
         <option value="">自動判斷</option>
-        {LINES.map((l, i) => <option key={i} value={i}>{l.brand} {l.line}</option>)}
+        {PRODUCTS.map((p, i) => <option key={p.key} value={i}>{p.brand.split(' ')[0]} {p.name}</option>)}
       </select>
       <div style={{ marginTop: 16 }}><button className="primary" disabled={busy || !key || !urls} onClick={submit}>{busy ? '處理中…' : '加入並抓取'}</button></div>
       {msg && <p>{msg}</p>}

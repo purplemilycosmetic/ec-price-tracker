@@ -1,6 +1,6 @@
 'use client';
-import { Fragment, useMemo, useState } from 'react';
-import { LINES } from '@/lib/classify';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { PRODUCTS, CUSTOM } from '@/lib/classify';
 import TrendChart from './TrendChart';
 
 export type Listing = {
@@ -15,35 +15,48 @@ export type PlatformEvent = {
   id: number; platform: string; kind: string; title: string | null; url: string; image_url: string | null;
   source: string | null; published_at: string | null; last_seen: string;
 };
+export type OfficialProduct = {
+  key: string; official_name: string | null; official_url: string | null; image_url: string | null;
+  channels: { name: string; url: string }[];
+};
 
+// 比價表與趨勢圖的平台（品牌官網不販售，資訊放在產品卡）
 const PLATFORMS = [
   { key: 'momo', name: 'momo' },
-  { key: 'official', name: '品牌官網' },
-  { key: 'shopee', name: '蝦皮' },
+  { key: 'shopee', name: '蝦皮商城' },
   { key: 'coupang', name: '酷澎' },
 ];
 const pname = (k: string) => PLATFORMS.find((p) => p.key === k)?.name ?? k;
-const STATUS: Record<string, string> = { blocked: '平台阻擋', not_found: '已下架', error: '抓取失敗' };
+const STATUS: Record<string, string> = { blocked: '平台阻擋', not_found: '已下架', error: '暫時抓不到' };
 const fmt = (n: number | null | undefined) => (n == null ? '—' : `$${n.toLocaleString()}`);
 const specKey = (spec: string | null) => spec || '未標示規格';
 function specSort(a: string, b: string) {
   const v = (s: string) => { const m = s.match(/([\d.]+)\D+(?:×(\d+))?/); return m ? +m[1] * (+(m[2] || 1)) : 1e9; };
   return v(a) - v(b);
 }
-// 全站通用、可以和商品折扣疊加的活動（全館滿額、刷卡回饋、折價券…）
+// 全站通用、可以和商品折扣疊加的活動
 const SITEWIDE = /全館|刷.*卡|信用卡|回饋|mo幣|蝦幣|折價券|優惠券|免運|LINE Pay|街口|全支付/;
 
-function Thumb({ src, alt }: { src: string | null | undefined; alt: string }) {
-  if (!src) return <div className="thumb empty" />;
+function Img({ src, alt, className }: { src: string | null | undefined; alt: string; className: string }) {
+  if (!src) return <span className={`${className} img-empty`} aria-hidden />;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img className="thumb" src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" />;
+  return <img className={className} src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" />;
 }
 
-export default function Dashboard({ listings, snaps, events, today }: { listings: Listing[]; snaps: Snap[]; events: PlatformEvent[]; today: string }) {
-  const [tab, setTab] = useState(0);
+export default function Dashboard({ listings, snaps, events, officials, today }: {
+  listings: Listing[]; snaps: Snap[]; events: PlatformEvent[]; officials: OfficialProduct[]; today: string;
+}) {
+  const hasCustom = listings.some((l) => l.line === CUSTOM);
+  const tabs = [...PRODUCTS.map((p) => ({ key: p.key, brand: p.brand.split(' ')[0], name: p.name, short: p.short })),
+    ...(hasCustom ? [{ key: CUSTOM, brand: '自訂', name: '自行搜尋加入的商品', short: '自訂追蹤' }] : [])];
+  const [tabKey, setTabKey] = useState(tabs[0].key);
+  // 記住上次看的產品（只是這台裝置的偏好，讀不到就用第一個）
+  useEffect(() => { try { const k = localStorage.getItem('ec-tab'); if (k && tabs.some((t) => t.key === k)) setTabKey(k); } catch {} }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { try { localStorage.setItem('ec-tab', tabKey); } catch {} }, [tabKey]);
   const [open, setOpen] = useState<string | null>(null);
   const [trendSpec, setTrendSpec] = useState<string | null>(null);
-  const line = LINES[tab];
+  const tab = tabs.find((t) => t.key === tabKey) ?? tabs[0];
+  const official = officials.find((o) => o.key === tab.key);
 
   const byListing = useMemo(() => {
     const m = new Map<number, Snap[]>();
@@ -53,243 +66,312 @@ export default function Dashboard({ listings, snaps, events, today }: { listings
   const days = useMemo(() => Array.from(new Set(snaps.map((s) => s.captured_on))).sort().slice(-30), [snaps]);
   const lastDay = days[days.length - 1];
   const latest = (l: Listing) => { const h = byListing.get(l.id); return h?.[h.length - 1]; };
+  const okToday = (l: Listing) => { const s = latest(l); return s && s.captured_on === lastDay && s.status === 'ok' && s.final_price != null ? s : null; };
 
-  const lineListings = useMemo(() => listings.filter((l) => l.brand === line.brand && l.line === line.line), [listings, line]);
+  const tabListings = useMemo(() => listings.filter((l) => l.line === tab.key && PLATFORMS.some((p) => p.key === l.platform)), [listings, tab.key]);
   const rows = useMemo(() => {
     const groups = new Map<string, Listing[]>();
-    for (const l of lineListings) { const k = specKey(l.spec); if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(l); }
+    for (const l of tabListings) { const k = tab.key === CUSTOM ? (l.title || l.url) : specKey(l.spec); if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(l); }
     return Array.from(groups.entries()).sort((a, b) => specSort(a[0], b[0]));
-  }, [lineListings]);
+  }, [tabListings, tab.key]);
 
-  function cell(ls: Listing[], platform: string) {
-    const mine = ls.filter((l) => l.platform === platform);
-    if (!mine.length) return null;
-    let best: { l: Listing; s: Snap; prev?: Snap } | null = null;
-    let anyStatus: Snap | undefined;
-    for (const l of mine) {
-      const hist = byListing.get(l.id) || [];
-      const s = hist[hist.length - 1];
+  function best(ls: Listing[], platform: string) {
+    let b: { l: Listing; s: Snap; prev?: Snap } | null = null;
+    for (const l of ls.filter((x) => x.platform === platform)) {
+      const s = okToday(l);
       if (!s) continue;
-      anyStatus = anyStatus || s;
-      if (s.status !== 'ok' || s.final_price == null) continue;
+      const hist = byListing.get(l.id) || [];
       const prev = [...hist].reverse().find((h) => h.captured_on < s.captured_on && h.final_price != null);
-      if (!best || s.final_price < best.s.final_price!) best = { l, s, prev };
+      if (!b || s.final_price! < b.s.final_price!) b = { l, s, prev };
     }
-    return { best, anyStatus };
-  }
-  // 規格列的代表圖：優先用最便宜那一筆的圖
-  function rowImage(ls: Listing[]) {
-    const withImg = ls.filter((l) => l.image_url);
-    withImg.sort((a, b) => (latest(a)?.final_price ?? 1e9) - (latest(b)?.final_price ?? 1e9));
-    return withImg[0]?.image_url;
+    return b;
   }
 
-  // ---- 趨勢圖：選定規格，每個平台每天的最低價 ----
+  // 主力規格：最多平台都有賣的規格，用在產品卡的價格階梯與預設趨勢圖
+  const heroSpec = useMemo(() => [...rows].sort((a, b) =>
+    new Set(b[1].filter((l) => okToday(l)).map((l) => l.platform)).size - new Set(a[1].filter((l) => okToday(l)).map((l) => l.platform)).size
+    || b[1].length - a[1].length)[0]?.[0] ?? null, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+  const heroRow = rows.find(([s]) => s === heroSpec)?.[1] ?? [];
+  const ladder = PLATFORMS.map((p) => ({ p, b: best(heroRow, p.key) })).filter((x) => x.b).sort((a, b) => a.b!.s.final_price! - b.b!.s.final_price!);
+  const ladderMax = Math.max(...ladder.map((x) => x.b!.s.final_price!), 1);
+  const heroImage = official?.image_url || [...tabListings].sort((a, b) => (a.platform === 'momo' ? -1 : 1) - (b.platform === 'momo' ? -1 : 1)).find((l) => l.image_url)?.image_url;
+
   const specs = rows.map(([s]) => s);
-  const curSpec = trendSpec && specs.includes(trendSpec) ? trendSpec
-    : [...rows].sort((a, b) => new Set(b[1].map((l) => l.platform)).size - new Set(a[1].map((l) => l.platform)).size)[0]?.[0] ?? null;
+  const curSpec = trendSpec && specs.includes(trendSpec) ? trendSpec : heroSpec;
   const trendSeries = PLATFORMS.map((p) => ({
     key: p.key, name: p.name,
     pts: days.map((day) => {
-      const v = lineListings.filter((l) => specKey(l.spec) === curSpec && l.platform === p.key)
+      const v = (rows.find(([s]) => s === curSpec)?.[1] ?? []).filter((l) => l.platform === p.key)
         .map((l) => (byListing.get(l.id) || []).find((s) => s.captured_on === day && s.status === 'ok')?.final_price)
         .filter((x): x is number => x != null);
       return v.length ? Math.min(...v) : null;
     }),
   }));
 
-  // ---- 本品項活動：依平台分開，每則活動列出適用的規格 ----
-  const linePromos = useMemo(() => {
-    const out: Record<string, Map<string, { text: string; period?: string; specs: Set<string>; sitewide: boolean }>> = {};
-    for (const l of lineListings) {
-      const s = latest(l);
-      if (!s || s.captured_on !== lastDay) continue;
+  // 本產品活動：依平台分開，每則活動列出適用規格；全站活動移到下方「可搭配」
+  const productPromos = useMemo(() => {
+    const out: Record<string, Map<string, { text: string; period?: string; specs: Set<string> }>> = {};
+    for (const l of tabListings) {
+      const s = okToday(l);
+      if (!s) continue;
       for (const p of s.promos || []) {
+        if (SITEWIDE.test(p.text)) continue;
         out[l.platform] ||= new Map();
         const k = (p.period || '') + p.text;
-        if (!out[l.platform].has(k)) out[l.platform].set(k, { ...p, specs: new Set(), sitewide: SITEWIDE.test(p.text) });
+        if (!out[l.platform].has(k)) out[l.platform].set(k, { ...p, specs: new Set() });
         out[l.platform].get(k)!.specs.add(specKey(l.spec));
       }
     }
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lineListings, byListing, lastDay]);
+  }, [tabListings, byListing, lastDay]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ---- 可搭配的平台活動（不分品項）----
   const sitewide = useMemo(() => {
     const out: Record<string, Map<string, { text: string; period?: string }>> = {};
     for (const l of listings) {
-      const s = latest(l);
-      if (!s || s.captured_on !== lastDay) continue;
+      const s = okToday(l);
+      if (!s) continue;
       for (const p of s.promos || []) if (SITEWIDE.test(p.text)) {
         out[l.platform] ||= new Map();
-        out[l.platform].set((p.period || '') + p.text, p);
+        out[l.platform].set((p.period || '') + p.text.replace(/再/, ''), p);
       }
     }
+    // 「全館滿1500折180」和「滿1,500元折180元」是同一件事，只留一則
+    for (const m of Object.values(out)) {
+      const seen = new Set<string>();
+      Array.from(m.entries()).forEach(([k, v]) => { const n = v.text.replace(/[^\d]/g, ''); if (seen.has(n)) m.delete(k); else seen.add(n); });
+    }
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listings, byListing, lastDay]);
+  }, [listings, byListing, lastDay]); // eslint-disable-line react-hooks/exhaustive-deps
   const banks = events.filter((e) => e.kind === 'bank');
   const news = events.filter((e) => e.kind === 'news').sort((a, b) => (b.published_at || '').localeCompare(a.published_at || ''));
+  const tileImage = (key: string) => officials.find((o) => o.key === key)?.image_url
+    || listings.find((l) => l.line === key && l.platform === 'momo' && l.image_url)?.image_url
+    || listings.find((l) => l.line === key && l.image_url)?.image_url;
 
   return (
-    <div className="wrap">
-      <header className="top">
-        <div>
-          <h1>保養品比價雷達</h1>
-          <div className="muted">momo・品牌官網・蝦皮・酷澎 每日 09:00 自動更新</div>
-        </div>
-        <div className="muted">最近更新：{lastDay ?? '尚無資料'}{lastDay && lastDay !== today ? '（今日尚未更新）' : ''}　<a href="/admin">管理商品</a></div>
-      </header>
-
-      <div className="tabs">
-        {LINES.map((l, i) => (
-          <button key={i} className={`tab ${i === tab ? 'on' : ''}`} onClick={() => { setTab(i); setOpen(null); setTrendSpec(null); }}>
-            {l.brand.split(' ')[0]} {l.line}
+    <main className="page">
+      {/* 產品切換 */}
+      <nav className="switcher" aria-label="追蹤產品">
+        {tabs.map((t) => (
+          <button key={t.key} className={`tile ${t.key === tab.key ? 'on' : ''}`} aria-pressed={t.key === tab.key}
+            onClick={() => { setTabKey(t.key); setOpen(null); setTrendSpec(null); }}>
+            <Img src={tileImage(t.key)} alt="" className="tile-img" />
+            <span className="tile-brand">{t.brand}</span>
+            <span className="tile-name">{t.short}</span>
           </button>
         ))}
-      </div>
+      </nav>
 
-      {/* 1. 比價表 */}
-      <div className="card">
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: 190 }}>規格</th>
-              {PLATFORMS.map((p) => <th key={p.key}><span className="dot" style={{ background: `var(--${p.key})` }} />{p.name}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {!rows.length && (
-              <tr><td colSpan={5} className="muted">還沒有這個品項的商品。到「管理商品」貼上商品網址即可開始追蹤。</td></tr>
+      {/* 產品卡 */}
+      <section className="hero">
+        <Img src={heroImage} alt={tab.name} className="hero-img" />
+        <div className="hero-body">
+          <div className="hero-brand">{tab.brand === '自訂' ? '自訂追蹤' : PRODUCTS.find((p) => p.key === tab.key)?.brand}</div>
+          <h1 className="display">{official?.official_name || tab.name}</h1>
+          <div className="hero-links">
+            {official?.official_url && <a href={official.official_url} target="_blank" rel="noreferrer">品牌官網</a>}
+            {official?.channels?.length ? (
+              <span className="channels">官方授權通路：{official.channels.map((c, i) => (
+                <Fragment key={c.name}>{i > 0 && '、'}<a href={c.url} target="_blank" rel="noreferrer">{c.name}</a></Fragment>
+              ))}</span>
+            ) : null}
+            {official?.official_url && <span className="note">官網不直接販售，無官網售價</span>}
+          </div>
+          <div className="hero-stats">
+            追蹤 {tabListings.length} 個商品頁、{rows.length} 種規格，資料日期 {lastDay ?? '—'}{lastDay && lastDay !== today ? '（今日 09:00 更新尚未完成）' : ''}
+          </div>
+        </div>
+        {ladder.length > 0 && tab.key !== CUSTOM && (
+          <div className="ladder" aria-label={`${heroSpec} 今日各平台最低價`}>
+            <div className="ladder-title">{heroSpec}　今日最低價</div>
+            {ladder.map(({ p, b }, i) => (
+              <a key={p.key} className="rung" href={b!.l.url} target="_blank" rel="noreferrer">
+                <span className="rung-name"><span className="swatch" style={{ background: `var(--${p.key})` }} />{p.name}</span>
+                <span className="rung-bar"><span style={{ width: `${(b!.s.final_price! / ladderMax) * 100}%`, background: `var(--${p.key})` }} /></span>
+                <span className="num rung-price">{fmt(b!.s.final_price)}</span>
+                {i === 0 && ladder.length > 1 && <span className="lowest">最低</span>}
+              </a>
+            ))}
+            {ladder.length > 1 && (
+              <div className="ladder-gap">最高與最低差 {fmt(ladder[ladder.length - 1].b!.s.final_price! - ladder[0].b!.s.final_price!)}</div>
             )}
-            {rows.map(([spec, ls]) => {
-              const cells = PLATFORMS.map((p) => cell(ls, p.key));
-              const lowest = Math.min(...cells.map((c) => c?.best?.s.final_price ?? Infinity));
-              const isOpen = open === spec;
-              return (
-                <Fragment key={spec}>
-                  <tr className="row" onClick={() => setOpen(isOpen ? null : spec)}>
-                    <td>
-                      <div className="spec-cell">
-                        <Thumb src={rowImage(ls)} alt={spec} />
-                        <div><b>{spec}</b><div className="sub">{ls.length} 個商品頁 {isOpen ? '▴' : '▾'}</div></div>
-                      </div>
-                    </td>
-                    {cells.map((c, i) => {
-                      if (!c) return <td key={i} className="status">未追蹤</td>;
-                      if (!c.best) return <td key={i} className="status">{STATUS[c.anyStatus?.status ?? ''] ?? '等待抓取'}</td>;
-                      const { s, prev, l } = c.best;
-                      const d = prev ? s.final_price! - prev.final_price! : 0;
-                      return (
-                        <td key={i}>
-                          <a className={`price ${s.final_price === lowest ? 'best' : ''}`} href={l.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-                            {fmt(s.final_price)}
-                          </a>
-                          {d !== 0 && <span className={`delta ${d < 0 ? 'down' : 'up'}`}>{d < 0 ? '▼' : '▲'}{Math.abs(d)}</span>}
-                          {s.list_price && s.list_price > s.final_price! && <div className="sub">原價 <span className="strike">{fmt(s.list_price)}</span></div>}
-                          {s.in_stock === false && <div className="sub">缺貨</div>}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                  {isOpen && (
-                    <tr className="detail">
-                      <td colSpan={5}>
-                        {ls.map((l) => {
-                          const s = latest(l);
-                          return (
-                            <div className="listing" key={l.id}>
-                              <Thumb src={l.image_url} alt={l.title || ''} />
-                              <span><span className="dot" style={{ background: `var(--${l.platform})` }} />{pname(l.platform)}</span>
-                              <a href={l.url} target="_blank" rel="noreferrer">{l.title || l.url}</a>
-                              <span className="price" style={{ fontSize: 14 }}>{s?.status === 'ok' ? fmt(s.final_price) : STATUS[s?.status ?? ''] ?? '—'}</span>
-                            </div>
-                          );
-                        })}
-                      </td>
+          </div>
+        )}
+      </section>
+
+      {/* 規格比價 */}
+      <section className="block">
+        <div className="block-head">
+          <h2>各規格價格</h2>
+          <p>每格是該平台這個規格今天的最低折後價，不含折價券與刷卡回饋。點一列可看所有商品頁。</p>
+        </div>
+        <div className="table-wrap">
+          <table className="grid-table">
+            <thead>
+              <tr>
+                <th scope="col">{tab.key === CUSTOM ? '商品' : '規格'}</th>
+                {PLATFORMS.map((p) => <th key={p.key} scope="col"><span className="swatch" style={{ background: `var(--${p.key})` }} />{p.name}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {!rows.length && (
+                <tr><td colSpan={4} className="empty-cell">這個產品還沒有資料。用上方搜尋找到商品後按「加入追蹤」，或到「管理」貼上商品網址。</td></tr>
+              )}
+              {rows.map(([spec, ls]) => {
+                const cells = PLATFORMS.map((p) => ({ p, b: best(ls, p.key), has: ls.some((l) => l.platform === p.key) }));
+                const lowest = Math.min(...cells.map((c) => c.b?.s.final_price ?? Infinity));
+                const isOpen = open === spec;
+                const img = ls.find((l) => l.platform === 'momo' && l.image_url)?.image_url || ls.find((l) => l.image_url)?.image_url;
+                return (
+                  <Fragment key={spec}>
+                    <tr className={`row ${isOpen ? 'is-open' : ''}`} onClick={() => setOpen(isOpen ? null : spec)}
+                      tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(isOpen ? null : spec); } }}
+                      aria-expanded={isOpen}>
+                      <th scope="row">
+                        <span className="spec">
+                          <Img src={img} alt="" className="thumb" />
+                          <span><span className="spec-name">{spec}</span><span className="spec-sub">{ls.length} 個商品頁</span></span>
+                        </span>
+                      </th>
+                      {cells.map(({ p, b, has }) => {
+                        if (!has) return <td key={p.key} className="na">未販售</td>;
+                        if (!b) {
+                          const st = ls.filter((l) => l.platform === p.key).map(latest).find(Boolean)?.status;
+                          return <td key={p.key} className="na">{STATUS[st ?? ''] ?? '今日無資料'}</td>;
+                        }
+                        const d = b.prev ? b.s.final_price! - b.prev.final_price! : 0;
+                        const isLow = b.s.final_price === lowest && cells.filter((c) => c.b).length > 1;
+                        return (
+                          <td key={p.key}>
+                            <a className={`num price ${isLow ? 'is-low' : ''}`} href={b.l.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                              {fmt(b.s.final_price)}
+                            </a>
+                            {isLow && <span className="lowest">最低</span>}
+                            {d !== 0 && <span className={`num delta ${d < 0 ? 'down' : 'up'}`}>{d < 0 ? '↓' : '↑'}{Math.abs(d)}</span>}
+                            {b.s.list_price != null && b.s.list_price > b.s.final_price! && <span className="num was">原價 {fmt(b.s.list_price)}</span>}
+                          </td>
+                        );
+                      })}
                     </tr>
-                  )}
-                </Fragment>
+                    {isOpen && (
+                      <tr className="detail">
+                        <td colSpan={4}>
+                          <ul className="pages">
+                            {[...ls].sort((a, b) => (okToday(a)?.final_price ?? 1e9) - (okToday(b)?.final_price ?? 1e9)).map((l) => {
+                              const s = okToday(l);
+                              return (
+                                <li key={l.id}>
+                                  <Img src={l.image_url} alt="" className="thumb" />
+                                  <span className="page-plat"><span className="swatch" style={{ background: `var(--${l.platform})` }} />{pname(l.platform)}</span>
+                                  <a href={l.url} target="_blank" rel="noreferrer" className="page-title">{l.title || l.url}</a>
+                                  <span className="num page-price">{s ? fmt(s.final_price) : STATUS[latest(l)?.status ?? ''] ?? '—'}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="foot">蝦皮商城與酷澎會擋掉伺服器連線，價格改由 BigGo 比價網取得，可能比平台晚幾小時。</p>
+      </section>
+
+      {/* 趨勢＋本產品活動 */}
+      <div className="split">
+        <section className="block">
+          <div className="block-head">
+            <h2>每日價格趨勢</h2>
+            <p>各平台同一規格的每日最低價。</p>
+          </div>
+          {specs.length > 1 && (
+            <div className="seg" role="group" aria-label="選擇規格">
+              {specs.map((s) => <button key={s} className={s === curSpec ? 'on' : ''} onClick={() => setTrendSpec(s)}>{s}</button>)}
+            </div>
+          )}
+          {curSpec ? <TrendChart days={days} series={trendSeries} /> : <p className="empty">還沒有資料。</p>}
+        </section>
+
+        <section className="block">
+          <div className="block-head">
+            <h2>這個產品的活動</h2>
+            <p>只列套用在本產品的折扣與組合；全站活動在下方。</p>
+          </div>
+          <div className="promo-list">
+            {PLATFORMS.map((p) => {
+              const items = Array.from(productPromos[p.key]?.values() || []);
+              return (
+                <div key={p.key} className="promo-plat">
+                  <h3><span className="swatch" style={{ background: `var(--${p.key})` }} />{p.name}</h3>
+                  {items.length ? (
+                    <ul>{items.slice(0, 8).map((it, i) => (
+                      <li key={i}>
+                        <span className="promo-text">{it.text}</span>
+                        {it.period && <span className="num promo-period">{it.period}</span>}
+                        <span className="promo-specs">{Array.from(it.specs).sort(specSort).join('、')}</span>
+                      </li>
+                    ))}</ul>
+                  ) : <p className="none">今天沒有針對本產品的活動</p>}
+                </div>
               );
             })}
-          </tbody>
-        </table>
+          </div>
+        </section>
       </div>
-      <div className="muted" style={{ marginTop: 8 }}>紅字為該規格今日最低價。價格為頁面顯示的折後價，不含折價券、信用卡回饋。蝦皮（蝦皮商城）與酷澎價格經由 BigGo 比價網取得，可能比平台實際價格晚幾小時更新。點列可展開各商品頁。</div>
 
-      {/* 2. 每日價格趨勢 */}
-      <h2>每日價格趨勢</h2>
-      {specs.length > 0 && (
-        <div className="chips">
-          {specs.map((s) => <button key={s} className={`chip-btn ${s === curSpec ? 'on' : ''}`} onClick={() => setTrendSpec(s)}>{s}</button>)}
+      {/* 可搭配的平台活動 */}
+      <section className="block">
+        <div className="block-head">
+          <h2>可以疊加的平台活動</h2>
+          <p>不限商品的全館滿額、刷卡與支付回饋，以及近三週的購物節消息。結帳時可以和上面的商品折扣一起用。</p>
         </div>
-      )}
-      <div className="card pad">
-        {curSpec ? <TrendChart days={days} series={trendSeries} /> : <div className="muted">尚無資料</div>}
-      </div>
-
-      {/* 3. 本品項各平台活動 */}
-      <h2>{line.brand.split(' ')[0]} {line.line}｜各平台活動</h2>
-      <div className="promos">
-        {PLATFORMS.map((p) => {
-          const items = Array.from(linePromos[p.key]?.values() || []).sort((a, b) => Number(a.sitewide) - Number(b.sitewide));
-          return (
-            <div className="card pad" key={p.key}>
-              <b><span className="dot" style={{ background: `var(--${p.key})` }} />{p.name}</b>
-              {items.length ? (
-                <ul>{items.slice(0, 12).map((it, i) => (
-                  <li key={i}>
-                    {it.period && <span className="muted">{it.period} </span>}{it.text}
-                    {it.sitewide && <span className="tag">全站</span>}
-                    <div className="sub">適用：{Array.from(it.specs).sort(specSort).join('、')}</div>
-                  </li>
-                ))}</ul>
-              ) : <div className="muted" style={{ marginTop: 8 }}>今日無資料</div>}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 4. 可搭配的平台活動 */}
-      <h2>可搭配的平台活動</h2>
-      <div className="muted" style={{ marginTop: -4, marginBottom: 10 }}>不限品項、可以和上面商品折扣一起用的全站活動：全館滿額、銀行／支付回饋，以及近期購物節新聞。</div>
-      <div className="platform-events">
-        {PLATFORMS.filter((p) => p.key !== 'official').map((p) => {
-          const sw = Array.from(sitewide[p.key]?.values() || []);
-          const bk = banks.filter((b) => b.platform === p.key);
-          const nw = news.filter((n) => n.platform === p.key).slice(0, 6);
-          return (
-            <div className="card pad" key={p.key}>
-              <b><span className="dot" style={{ background: `var(--${p.key})` }} />{p.name}</b>
-              {sw.length > 0 && (<>
-                <div className="ev-h">全館活動</div>
-                <ul>{sw.map((s, i) => <li key={i}>{s.period && <span className="muted">{s.period} </span>}{s.text}</li>)}</ul>
-              </>)}
-              {bk.length > 0 && (<>
-                <div className="ev-h">銀行／支付優惠</div>
-                <div className="banners">
-                  {bk.map((b) => (
-                    <a key={b.id} href={b.url} target="_blank" rel="noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={b.image_url || ''} alt="銀行優惠活動" loading="lazy" referrerPolicy="no-referrer" />
-                    </a>
-                  ))}
+        <div className="platforms">
+          {PLATFORMS.map((p) => {
+            const sw = Array.from(sitewide[p.key]?.values() || []);
+            const bk = banks.filter((b) => b.platform === p.key);
+            const nw = news.filter((n) => n.platform === p.key).slice(0, 5);
+            return (
+              <article key={p.key} className="plat-card">
+                <h3><span className="swatch" style={{ background: `var(--${p.key})` }} />{p.name}</h3>
+                {sw.length > 0 && (
+                  <div className="plat-sec">
+                    <h4>全館活動</h4>
+                    <ul>{sw.map((s, i) => <li key={i}>{s.text}{s.period && <span className="num promo-period">{s.period}</span>}</li>)}</ul>
+                  </div>
+                )}
+                {bk.length > 0 && (
+                  <div className="plat-sec">
+                    <h4>刷卡與支付優惠</h4>
+                    <div className="banners">
+                      {bk.map((b) => (
+                        <a key={b.id} href={b.url} target="_blank" rel="noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={b.image_url || ''} alt="momo 刷卡與支付優惠活動" loading="lazy" referrerPolicy="no-referrer" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="plat-sec">
+                  <h4>近期購物節消息</h4>
+                  {nw.length ? (
+                    <ul className="news">{nw.map((n) => (
+                      <li key={n.id}>
+                        <a href={n.url} target="_blank" rel="noreferrer">{n.title}</a>
+                        <span className="src">{n.source}，{n.published_at?.slice(5, 10).replace('-', '/')}</span>
+                      </li>
+                    ))}</ul>
+                  ) : <p className="none">近三週沒有相關消息</p>}
                 </div>
-              </>)}
-              <div className="ev-h">近期活動新聞</div>
-              {nw.length ? (
-                <ul className="news">{nw.map((n) => (
-                  <li key={n.id}>
-                    <a href={n.url} target="_blank" rel="noreferrer">{n.title}</a>
-                    <div className="sub">{n.source}・{n.published_at?.slice(0, 10)}</div>
-                  </li>
-                ))}</ul>
-              ) : <div className="muted">近三週沒有相關新聞</div>}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+    </main>
   );
 }
