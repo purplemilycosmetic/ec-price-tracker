@@ -104,9 +104,15 @@ export async function scrapeMomo(url: string): Promise<ScrapeResult> {
   const image = meta(html, 'og:image');
   // 商品頁上的「銀行優惠活動」輪播，是全站共用的刷卡／支付優惠
   const banners: { href: string; src: string }[] = [];
-  const re = /<a[^>]*href="([^"]*)"[^>]*>\s*(?:<[^a][^>]*>\s*)*<img[^>]*src="([^"]+)"[^>]*alt="銀行優惠活動"/g;
-  let bm;
-  while ((bm = re.exec(html)) && banners.length < 20) banners.push({ href: decode(bm[1]), src: decode(bm[2]) });
+  let at = html.indexOf('alt="銀行優惠活動"');
+  while (at >= 0 && banners.length < 20) {
+    const before = html.slice(Math.max(0, at - 800), at);
+    const src = before.match(/<img[^>]*src="([^"]+)"[^>]*$/)?.[1];
+    const hrefs = before.match(/href="([^"]+)"/g);
+    const href = hrefs?.[hrefs.length - 1]?.slice(6, -1);
+    if (src && href && !banners.some((b) => b.src === decode(src))) banners.push({ href: decode(href), src: decode(src) });
+    at = html.indexOf('alt="銀行優惠活動"', at + 10);
+  }
   return { status: 'ok', title, list_price, sale_price, final_price, promos, in_stock, image, banners };
 }
 
