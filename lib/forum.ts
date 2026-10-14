@@ -65,15 +65,21 @@ export async function runForum() {
   const t0 = Date.now();
   const stats: Record<string, number> = {};
   const all: RawPost[] = [];
-  await Promise.all(SOURCES.map(async (s) => {
+  const one = async (s: Source) => {
     try {
       const url = s.kind === 'ptt' ? `https://www.pttweb.cc/bbs/${s.board}` : `https://www.reddit.com/r/${s.board}/top/.rss?t=day`;
-      const r = await get(url);
+      let r = await get(url);
+      if (r.status !== 200 && s.kind === 'reddit') { await new Promise((ok) => setTimeout(ok, 2500)); r = await get(url); }
       const posts = r.status === 200 ? (s.kind === 'ptt' ? parsePtt(r.text, s) : parseReddit(r.text, s)) : [];
       stats[s.id] = r.status === 200 ? posts.length : -r.status;
       all.push(...posts);
     } catch { stats[s.id] = -1; }
-  }));
+  };
+  // PTT 同時抓；Reddit 容易因短時間請求太多被拒絕，一個一個抓、中間間隔
+  await Promise.all([
+    Promise.all(SOURCES.filter((s) => s.kind === 'ptt').map(one)),
+    (async () => { for (const s of SOURCES.filter((x) => x.kind === 'reddit')) { await one(s); await new Promise((ok) => setTimeout(ok, 1500)); } })(),
+  ]);
   // 一個網址只留一筆
   const uniq = Array.from(new Map(all.map((p) => [p.url, p])).values());
   if (uniq.length) {
