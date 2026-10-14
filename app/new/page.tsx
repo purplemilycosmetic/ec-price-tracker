@@ -2,6 +2,9 @@ import { searchBiggo } from '@/lib/biggo';
 import { searchMomo } from '@/lib/momoSearch';
 import { classify, normalize } from '@/lib/classify';
 import NewForm, { type Hit } from './NewForm';
+import Restore from './Restore';
+import { PRODUCTS, CUSTOM, productLabel } from '@/lib/classify';
+import { loadUserProducts, loadHidden } from '@/lib/custom';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -9,6 +12,12 @@ export const maxDuration = 30;
 export default async function NewProduct({ searchParams }: { searchParams: { name?: string; q?: string } }) {
   const name = (searchParams.name || '').trim().slice(0, 40);
   const q = (searchParams.q || name).trim().slice(0, 60);
+  const [hidden, users] = await Promise.all([loadHidden(), loadUserProducts(true)]);
+  const stopped = [
+    ...PRODUCTS.filter((p) => hidden.has(p.key)).map((p) => ({ key: p.key, name: productLabel(p) })),
+    ...users.filter((u) => !u.active).map((u) => ({ key: u.key, name: u.name })),
+    ...(hidden.has(CUSTOM) ? [{ key: CUSTOM, name: '自訂追蹤' }] : []),
+  ];
   let hits: Hit[] = [];
   const failed: string[] = [];
   if (q) {
@@ -41,6 +50,7 @@ export default async function NewProduct({ searchParams }: { searchParams: { nam
       </form>
       {failed.length > 0 && <p className="warn">{failed.join('、')} 這次沒有回應，結果可能不完整，稍後再搜一次。</p>}
       {name && <NewForm name={name} query={q} hits={hits} />}
+      {!name && <Restore items={stopped} />}
     </main>
   );
 }

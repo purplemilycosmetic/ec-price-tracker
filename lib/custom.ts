@@ -12,3 +12,11 @@ export async function loadUserProducts(includeInactive = false): Promise<UserPro
     return (data || []) as UserProduct[];
   } catch { return []; }
 }
+
+// 停止追蹤的產品（內建產品、自訂追蹤）；自建產品用 ec_custom_products.active 控制
+export async function loadHidden(): Promise<Set<string>> {
+  try {
+    const { data } = await adminDb().from('ec_hidden_products').select('key');
+    return new Set((data || []).map((d) => d.key as string));
+  } catch { return new Set(); }
+}

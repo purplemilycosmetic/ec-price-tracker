@@ -22,6 +22,8 @@ export async function POST(req: NextRequest) {
   // 標題能對到追蹤中的產品就歸到該產品，否則列在「自訂追蹤」
   const c = body.title ? classify(body.title) : null;
   const line = body.line || c?.line || (body.title ? CUSTOM : null); // 沒標題時先留空，抓到標題後自動判斷
+  // 加入的商品所屬產品若被停止追蹤過，自動恢復顯示
+  if (line) await db.from('ec_hidden_products').delete().eq('key', line);
   const rows = urls.map((url) => ({
     url, platform: detectPlatform(url), active: true, line, brand: c?.brand ?? null,
     ...(body.title ? { title: body.title, spec: c?.spec ?? null, image_url: body.image || null } : {}),

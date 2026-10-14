@@ -1,10 +1,10 @@
 import { adminDb, todayTaipei } from './db';
 import { scrape } from './scrapers';
 import { classify, CUSTOM, PRODUCTS, productOf } from './classify';
-import { isUserKey, loadUserProducts } from './custom';
+import { isUserKey, loadUserProducts, loadHidden } from './custom';
 import { searchMomo } from './momoSearch';
 import { fetchAllOfficial } from './official';
-import { BIGGO_QUERIES, searchBiggo, type BiggoItem } from './biggo';
+import { searchBiggo, type BiggoItem } from './biggo';
 import { fetchNews } from './news';
 import { logPromos, archiveBanners } from './archive';
 import { jobLog, logJob } from './jobs';
@@ -82,7 +82,8 @@ export async function runUpdate(onlyIds?: number[]) {
 export async function discoverMomo() {
   const db = adminDb();
   const rows: any[] = [];
-  const jobs = PRODUCTS.flatMap((p) => p.queries.map((q) => ({ p, q })));
+  const hidden = await loadHidden();
+  const jobs = PRODUCTS.filter((p) => !hidden.has(p.key)).flatMap((p) => p.queries.map((q) => ({ p, q })));
   // 同時搜尋（間隔 250ms 錯開），避免拖長整體執行時間
   const results = await Promise.all(jobs.map(({ q }, i) =>
     new Promise((r) => setTimeout(r, i * 250)).then(() => searchMomo(q)).catch(() => ({ items: [] as any[] }))));
@@ -103,7 +104,8 @@ export async function discoverMomo() {
 // 品牌官網：正式品名、官方圖片、授權通路；官網列出的 momo 商品頁自動加入追蹤
 export async function runOfficial() {
   const db = adminDb();
-  const infos = await fetchAllOfficial();
+  const hidden = await loadHidden();
+  const infos = (await fetchAllOfficial()).filter((i) => !hidden.has(i.key));
   if (infos.length) await db.from('ec_products').upsert(infos.map((i) => ({ ...i, updated_at: new Date().toISOString() })), { onConflict: 'key' });
   const momo = infos.flatMap((i) => i.channels.filter((c) => c.name === 'momo').map((c) => ({ key: i.key, code: c.url.match(/i_code=(\d+)/)?.[1] })))
     .filter((m) => m.code);
@@ -137,15 +139,16 @@ export async function runBiggo(day: string, opts: { onlyPending?: boolean; budge
   const results: { status: number; items: any[] }[] = [];
   const t0 = Date.now();
   // 自行搜尋加入追蹤的商品：用當初的關鍵字每天再搜一次，依網址對回
-  const [{ data: watch }, { data: customs }, userProducts] = await Promise.all([
+  const [{ data: watch }, { data: customs }, userProducts, hidden] = await Promise.all([
     db.from('ec_watch_queries').select('query'),
     db.from('ec_listings').select('url,line').eq('active', true).in('platform', ['shopee', 'coupang']),
     loadUserProducts(),
+    loadHidden(),
   ]);
   // 網址 → 使用者指定的產品（自訂追蹤或自建產品）；內建產品由標題自動判斷
   const customLine = new Map((customs || []).filter((c) => c.line && !productOf(c.line)).map((c) => [c.url as string, c.line as string]));
   const customUrls = new Set(Array.from(customLine.keys()));
-  let queries = Array.from(new Set([...BIGGO_QUERIES, ...(watch || []).map((w) => w.query), ...userProducts.flatMap((u) => u.queries)]));
+  let queries = Array.from(new Set([...PRODUCTS.filter((p) => !hidden.has(p.key)).flatMap((p) => p.queries), ...(watch || []).map((w) => w.query), ...userProducts.flatMap((u) => u.queries)]));
   // 每小時補抓：今天已經抓到資料的關鍵字跳過，只重抓失敗的
   const log = await jobLog(day, 'biggo:');
   if (opts.onlyPending) queries = queries.filter((q) => !log.get('biggo:' + q)?.ok && (log.get('biggo:' + q)?.attempts ?? 0) < 24);
@@ -163,7 +166,7 @@ export async function runBiggo(day: string, opts: { onlyPending?: boolean; budge
     if (status !== 200) searchFailed++;
     for (const it of items) {
       const c = classify(it.title);
-      if (!c.line && !customUrls.has(it.url)) continue; // 只留追蹤中的產品
+      if ((!c.line || hidden.has(c.line)) && !customUrls.has(it.url)) continue; // 只留追蹤中的產品（停止追蹤的不收）
       if (/非賣品|贈品|請勿下單|兌換|0元加購/.test(it.title) || it.price >= 9999) continue; // 贈品、佔位商品
       const prev = found.get(it.url);
       if (!prev || it.price < prev.price) found.set(it.url, it);

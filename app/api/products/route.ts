@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, todayTaipei } from '@/lib/db';
 import { detectPlatform } from '@/lib/scrapers';
 import { runUpdate } from '@/lib/update';
-import { classify } from '@/lib/classify';
+import { classify, CUSTOM, PRODUCTS } from '@/lib/classify';
 import { isUserKey } from '@/lib/custom';
 
 export const dynamic = 'force-dynamic';
@@ -27,10 +27,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  if (body.action === 'remove') {
-    if (!isUserKey(body.product)) return NextResponse.json({ error: '只能停止自建產品' }, { status: 400 });
-    await db.from('ec_custom_products').update({ active: false }).eq('key', body.product);
-    await db.from('ec_listings').update({ active: false }).eq('line', body.product);
+  // 停止追蹤：內建產品、自建產品、自訂追蹤都可以；歷史資料保留，可以再恢復
+  const known = (k: string) => isUserKey(k) || k === CUSTOM || PRODUCTS.some((p) => p.key === k);
+  if (body.action === 'remove' || body.action === 'restore') {
+    const k = String(body.product || '');
+    if (!known(k)) return NextResponse.json({ error: '找不到這個產品' }, { status: 400 });
+    const on = body.action === 'restore';
+    if (isUserKey(k)) await db.from('ec_custom_products').update({ active: on }).eq('key', k);
+    else if (on) await db.from('ec_hidden_products').delete().eq('key', k);
+    else await db.from('ec_hidden_products').upsert({ key: k }, { onConflict: 'key' });
+    await db.from('ec_listings').update({ active: on }).eq('line', k);
     return NextResponse.json({ ok: true });
   }
 

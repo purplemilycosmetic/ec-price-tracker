@@ -270,3 +270,6 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px
 .kw-bar span { display: block; height: 100%; background: var(--ink); opacity: .55; border-radius: 4px; }
 .kw-n { text-align: right; color: var(--muted); }
 .top-list { max-width: 760px; }
+.restore { list-style: none; margin: 0; padding: 0; }
+.restore li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.restore li:last-child { border-bottom: 0; }

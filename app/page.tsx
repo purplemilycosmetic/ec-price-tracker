@@ -1,6 +1,6 @@
 import { adminDb, todayTaipei, fetchAll } from '@/lib/db';
 import { cleanNews } from '@/lib/news';
-import { loadUserProducts } from '@/lib/custom';
+import { loadUserProducts, loadHidden } from '@/lib/custom';
 import Dashboard, { type Listing, type Snap, type PlatformEvent, type OfficialProduct } from './Dashboard';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +22,7 @@ export default async function Page() {
   const since = new Date(nowTw - 45 * dayMs).toISOString().slice(0, 10);
   const recent = new Date(nowTw - 3 * dayMs).toISOString().slice(0, 10);
   const newsSince = new Date(Date.now() - 21 * dayMs).toISOString();
-  const userProducts = await loadUserProducts();
+  const [userProducts, hidden] = await Promise.all([loadUserProducts(), loadHidden()]);
   const [{ data: listings }, snaps, { data: banks }, { data: news }, { data: officials }] = await Promise.all([
     db.from('ec_listings').select('id,brand,line,spec,platform,url,title,image_url').eq('active', true),
     fetchAll((a, b) => db.from('ec_price_snapshots')
@@ -40,6 +40,7 @@ export default async function Page() {
       officials={(officials || []) as OfficialProduct[]}
       today={todayTaipei()}
       userProducts={userProducts}
+      hidden={Array.from(hidden)}
     />
   );
 }

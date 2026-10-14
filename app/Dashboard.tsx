@@ -43,13 +43,14 @@ function Img({ src, alt, className }: { src: string | null | undefined; alt: str
   return <img className={className} src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" />;
 }
 
-export default function Dashboard({ listings, snaps, events, officials, today, userProducts }: {
-  listings: Listing[]; snaps: Snap[]; events: PlatformEvent[]; officials: OfficialProduct[]; today: string; userProducts: UserProduct[];
+export default function Dashboard({ listings, snaps, events, officials, today, userProducts, hidden }: {
+  listings: Listing[]; snaps: Snap[]; events: PlatformEvent[]; officials: OfficialProduct[]; today: string; userProducts: UserProduct[]; hidden: string[];
 }) {
-  const hasCustom = listings.some((l) => l.line === CUSTOM);
-  const tabs = [...PRODUCTS.map((p) => ({ key: p.key, brand: p.brand.split(' ')[0], full: p.brand, name: p.name, short: p.short })),
+  const hasCustom = listings.some((l) => l.line === CUSTOM) && !hidden.includes(CUSTOM);
+  const tabs = [...PRODUCTS.filter((p) => !hidden.includes(p.key)).map((p) => ({ key: p.key, brand: p.brand.split(' ')[0], full: p.brand, name: p.name, short: p.short })),
     ...userProducts.map((u) => ({ key: u.key, brand: u.brand || '自建', full: u.brand || '自建產品', name: u.name, short: u.short })),
     ...(hasCustom ? [{ key: CUSTOM, brand: '自訂', full: '自訂追蹤', name: '自行搜尋加入的商品', short: '自訂追蹤' }] : [])];
+  if (!tabs.length) tabs.push({ key: '__none', brand: '', full: '', name: '還沒有追蹤的產品', short: '' });
   const [tabKey, setTabKey] = useState(tabs[0].key);
   // 記住上次看的產品（只是這台裝置的偏好，讀不到就用第一個）
   useEffect(() => { try { const k = localStorage.getItem('ec-tab'); if (k && tabs.some((t) => t.key === k)) setTabKey(k); } catch {} }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -65,12 +66,12 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
     if (r.ok) { try { localStorage.setItem('ec-admin-key', key); } catch {} window.location.reload(); } else window.alert('改名失敗，請確認管理密碼');
   }
   async function removeProduct(product: string, name: string) {
-    if (!window.confirm(`停止追蹤「${name}」？已存的歷史價格仍可在「歷史查詢」看到。`)) return;
+    if (!window.confirm(`停止追蹤「${name}」？\n之後不再抓這個產品的價格與活動；已存的歷史資料保留，可在「新增產品」頁恢復追蹤。`)) return;
     let key = ''; try { key = localStorage.getItem('ec-admin-key') || ''; } catch {}
     if (!key) key = window.prompt('輸入管理密碼') || '';
     if (!key) return;
     const r = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, action: 'remove', product }) });
-    if (r.ok) window.location.reload(); else window.alert('操作失敗，請確認管理密碼');
+    if (r.ok) { try { localStorage.setItem('ec-admin-key', key); localStorage.removeItem('ec-tab'); } catch {} window.location.reload(); } else window.alert('操作失敗，請確認管理密碼');
   }
   const [trendSpec, setTrendSpec] = useState<string | null>(null);
   const tab = tabs.find((t) => t.key === tabKey) ?? tabs[0];
@@ -170,7 +171,7 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
     <main className="page">
       {/* 產品切換 */}
       <nav className="switcher" aria-label="追蹤產品">
-        {tabs.map((t) => (
+        {tabs.filter((t) => t.key !== '__none').map((t) => (
           <button key={t.key} className={`tile ${t.key === tab.key ? 'on' : ''}`} aria-pressed={t.key === tab.key}
             onClick={() => { setTabKey(t.key); setOpen(null); setTrendSpec(null); }}>
             <Img src={tileImage(t.key)} alt="" className="tile-img" />
@@ -196,10 +197,10 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
             ) : null}
             {official?.official_url && <span className="note">官網不直接販售，無官網售價</span>}
           </div>
-          {isUserKey(tab.key) && (
-            <div className="hero-links"><button className="btn-quiet" onClick={() => renameProduct(tab.key, tab.name)}>修改名稱</button>
-              <button className="btn-quiet" onClick={() => removeProduct(tab.key, tab.name)}>停止追蹤這個產品</button></div>
-          )}
+          <div className="hero-links">
+            {isUserKey(tab.key) && <button className="btn-quiet" onClick={() => renameProduct(tab.key, tab.name)}>修改名稱</button>}
+            {tab.key !== '__none' && <button className="btn-quiet" onClick={() => removeProduct(tab.key, tab.name)}>刪除（停止追蹤）</button>}
+          </div>
           <div className="hero-stats">
             追蹤 {tabListings.length} 個商品頁、{rows.length} 種規格，資料日期 {lastDay ?? '—'}{lastDay && lastDay !== today ? '（今日 09:00 更新尚未完成）' : ''}
           </div>
