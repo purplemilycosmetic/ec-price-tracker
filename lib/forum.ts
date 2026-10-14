@@ -55,7 +55,7 @@ function parseReddit(xml: string, s: Source): RawPost[] {
 }
 
 async function get(url: string) {
-  const r = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8' }, cache: 'no-store' });
+  const r = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8' }, cache: 'no-store', signal: AbortSignal.timeout(9000) });
   return { status: r.status, text: r.ok ? await r.text() : '' };
 }
 
@@ -91,12 +91,12 @@ export async function runForum() {
   }
   // PTT 文章的內文開頭（網頁版的 og:description）：每次補最多 24 篇
   const { data: need } = await db.from('ec_forum_posts').select('url,board').like('url', 'https://www.ptt.cc/%').is('excerpt', null)
-    .gte('posted_at', new Date(Date.now() - 30 * 86400_000).toISOString()).order('posted_at', { ascending: false }).limit(24);
+    .gte('posted_at', new Date(Date.now() - 30 * 86400_000).toISOString()).order('posted_at', { ascending: false }).limit(16);
   const queue = [...(need || [])];
   let filled = 0;
   const exStatus: Record<string, number> = {};
   await Promise.all([1, 2].map(async () => {
-    while (queue.length && Date.now() - t0 < 45000) {
+    while (queue.length && Date.now() - t0 < 28000) {
       const n = queue.shift()!;
       try {
         const r = await get(n.url.replace('https://www.ptt.cc/bbs/', 'https://www.pttweb.cc/bbs/').replace(/\.html$/, ''));
