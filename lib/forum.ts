@@ -94,18 +94,25 @@ export async function runForum() {
     .gte('posted_at', new Date(Date.now() - 30 * 86400_000).toISOString()).order('posted_at', { ascending: false }).limit(24);
   const queue = [...(need || [])];
   let filled = 0;
-  await Promise.all([1, 2, 3, 4].map(async () => {
+  const exStatus: Record<string, number> = {};
+  await Promise.all([1, 2].map(async () => {
     while (queue.length && Date.now() - t0 < 45000) {
       const n = queue.shift()!;
       try {
         const r = await get(n.url.replace('https://www.ptt.cc/bbs/', 'https://www.pttweb.cc/bbs/').replace(/\.html$/, ''));
         const d = r.text.match(/property="og:description" content="([^"]*)"/)?.[1];
+        exStatus[r.status] = (exStatus[r.status] || 0) + 1;
         if (r.status === 200) {
-          await db.from('ec_forum_posts').update({ excerpt: stripTags(d || '').slice(0, 400) || '(無內文)' }).eq('url', n.url);
+          // 去掉 PTT 簽名檔與「發信站」之後的樣板文字
+          const t = stripTags(d || '').split(/※ ?發信站|--\s/)[0].replace(/https?:\/\/\S+/g, '').trim();
+          await db.from('ec_forum_posts').update({ excerpt: t.slice(0, 400) || '(無內文)' }).eq('url', n.url);
           filled++;
         }
-      } catch {}
+        await new Promise((ok) => setTimeout(ok, 400));
+      } catch (e) { exStatus.err = (exStatus.err || 0) + 1; }
     }
   }));
-  return { forum_posts: uniq.length, forum_excerpts: filled, forum_sources: stats };
+  const result = { forum_posts: uniq.length, forum_excerpts: filled, forum_excerpt_status: exStatus, forum_sources: stats, ms: Date.now() - t0 };
+  await db.from('ec_debug').insert({ url: 'forum-run', status: 200, body: JSON.stringify(result) });
+  return result;
 }

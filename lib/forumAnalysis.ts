@@ -36,7 +36,7 @@ const TERMS: { group: string; items: [string, RegExp][] }[] = [
   ] },
 ];
 
-const TOPICS: { label: string; hint: string; re: RegExp }[] = [
+const TOPICS: { label: string; hint: string; re: RegExp; titleOnly?: boolean }[] = [
   { label: '敏感肌、泛紅與修復', hint: '舒緩、屏障修復、刺痛過敏', re: /敏感|泛紅|刺痛|過敏|紅腫|屏障|修復|舒緩|sensitive|redness|irritat|barrier|sting|allerg|soothing|reaction/i },
   { label: '痘痘、毛孔與控油', hint: '痘痘粉刺、毛孔黑頭、出油', re: /痘|粉刺|閉口|毛孔|黑頭|出油|控油|acne|pimple|breakout|pores|blackhead|oily|sebum/i },
   { label: '保濕與乾燥', hint: '乾肌、補水、保濕', re: /保濕|乾燥|乾肌|補水|乾裂|dry|hydrat|moisturi[sz]|dehydrat/i },
@@ -50,11 +50,11 @@ const TOPICS: { label: string; hint: string; re: RegExp }[] = [
   { label: '踩雷、退貨與負評', hint: '雷品、不適用、退貨', re: /踩雷|雷品|地雷|退貨|不推|失望|後悔|flop|disappoint|waste|regret|return(ed)?\b|not worth/i },
   { label: '回購與愛用推薦', hint: '空瓶、回購、愛用、推薦', re: /回購|空瓶|愛用|推薦|必買|神|holy grail|\bHG\b|repurchase|favorite|love|recommend|hit pan/i },
   { label: '新品與情報', hint: '新品上市、限定組、聯名', re: /新品|情報|上市|限定|聯名|新色|launch|new release|limited|collab/i },
-  { label: '疑問求助', hint: '求推薦、請益、怎麼辦', re: /請益|求推薦|求助|請問|怎麼辦|如何|有人|推薦嗎|\?\s*$|？|help|advice|recommend(ation)?s?\b|should i|any/i },
+  { label: '疑問求助', hint: '標題在求推薦、請益、問怎麼辦', re: /請益|求推薦|求助|請問|怎麼辦|推薦嗎|？|\?|help|advice|recommendations?\b|should i|anyone/i, titleOnly: true },
 ];
 
-const ZH_STOP = new Set(('我們 你們 他們 自己 這個 那個 這樣 那樣 什麼 怎麼 可以 因為 所以 但是 如果 還是 或是 已經 真的 現在 今天 昨天 明天 最近 一個 一些 有點 非常 比較 其實 覺得 感覺 大家 有人 請問 想問 問題 心得 推薦 閒聊 討論 分享 請益 情報 美妝 保養 產品 使用 看到 知道 之前 之後 時候 應該 需要 不會 沒有 不是 就是 還有 而且 真是 不要 看看 一下 一直 然後 的話 起來 出來 下來 上面 下面 以前 現在 目前 可能 通常 大概 好像 希望 謝謝 各位 板友 版友 請教 求助 版上 板上 問卷 關於 對於 一樣 不同 其他 另外 這種 那種 這邊 那邊 開始 繼續 一定 完全 特別 稍微 有沒有 是不是 能不能 要不要 好用 不好 不錯').split(/\s+/));
-const EN_STOP = new Set(('the and for that this with you your have has had are was were but not what when which who how why can could would should will just like get got use used using one two any all out our from they them their there here about into over than then also some more most much very really too its it\'s i\'m i\'ve don\'t doesn\'t didn\'t isn\'t can\'t not does did been being being than only other such these those after before because while still even well make made want need know think look looks feel feels tried try trying since being skin product products help please thanks thank anyone does routine new best good great love hate between around every each many same another something someone everything anything').split(/\s+/));
+const ZH_STOP = new Set(('發信 踢踢 實業 來自 文章 網址 批踢踢 作者 看板 標題 時間 轉錄 引述 編輯 修改 我們 你們 他們 自己 這個 那個 這樣 那樣 什麼 怎麼 可以 因為 所以 但是 如果 還是 或是 已經 真的 現在 今天 昨天 明天 最近 一個 一些 有點 非常 比較 其實 覺得 感覺 大家 有人 請問 想問 問題 心得 推薦 閒聊 討論 分享 請益 情報 美妝 保養 產品 使用 看到 知道 之前 之後 時候 應該 需要 不會 沒有 不是 就是 還有 而且 真是 不要 看看 一下 一直 然後 的話 起來 出來 下來 上面 下面 以前 現在 目前 可能 通常 大概 好像 希望 謝謝 各位 板友 版友 請教 求助 版上 板上 問卷 關於 對於 一樣 不同 其他 另外 這種 那種 這邊 那邊 開始 繼續 一定 完全 特別 稍微 有沒有 是不是 能不能 要不要 好用 不好 不錯').split(/\s+/));
+const EN_STOP = new Set(('https http www com reddit amp years year skincare makeup comments comment submitted link post posted day days week weeks month months the and for that this with you your have has had are was were but not what when which who how why can could would should will just like get got use used using one two any all out our from they them their there here about into over than then also some more most much very really too its it\'s i\'m i\'ve don\'t doesn\'t didn\'t isn\'t can\'t not does did been being being than only other such these those after before because while still even well make made want need know think look looks feel feels tried try trying since being skin product products help please thanks thank anyone does routine new best good great love hate between around every each many same another something someone everything anything').split(/\s+/));
 
 let seg: Intl.Segmenter | null = null;
 function words(text: string, lang: string): string[] {
@@ -79,7 +79,9 @@ export type Analysis = {
   top: Post[];
 };
 
-const text = (p: Post) => `${p.title}\n${p.excerpt || ''}`;
+// 內文：去掉網址與 PTT 發信站之後的樣板文字
+const clean = (t: string) => t.replace(/https?:\/\/\S+/g, ' ').split(/※ ?發信站/)[0];
+const text = (p: Post) => `${p.title}\n${clean(p.excerpt || '')}`;
 
 export function analyze(posts: Post[]): Analysis {
   const termHits = TERMS.map((g) => ({ group: g.group, list: g.items.map(([w, re]) => ({ w, n: posts.filter((p) => re.test(text(p))).length })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n).slice(0, 14) }));
@@ -90,7 +92,7 @@ export function analyze(posts: Post[]): Analysis {
   const other = Array.from(df.entries()).filter(([w, n]) => n >= min && !known.has(w)).map(([w, n]) => ({ w, n })).sort((a, b) => b.n - a.n).slice(0, 36);
   const rank = (a: Post, b: Post) => b.pushes - a.pushes || b.posted_at.localeCompare(a.posted_at);
   const topics = TOPICS.map((t) => {
-    const ps = posts.filter((p) => t.re.test(text(p))).sort(rank);
+    const ps = posts.filter((p) => t.re.test(t.titleOnly ? p.title : text(p))).sort(rank);
     return { label: t.label, hint: t.hint, n: ps.length, posts: ps.slice(0, 5) };
   }).filter((t) => t.n > 0).sort((a, b) => b.n - a.n);
   return { total: posts.length, terms: termHits, other, topics, top: [...posts].sort(rank).slice(0, 10) };
