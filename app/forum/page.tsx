@@ -1,6 +1,6 @@
 import { adminDb, todayTaipei, addDays, fetchAll } from '@/lib/db';
 import { analyze, mentions, type Post, type Counted } from '@/lib/forumAnalysis';
-import { SOURCES, sourceName } from '@/lib/forum';
+import { PLATFORMS, SOURCE_IDS, platformOf, sourceName } from '@/lib/forum';
 import { PRODUCTS } from '@/lib/classify';
 
 export const dynamic = 'force-dynamic';
@@ -28,7 +28,7 @@ function PostLine({ p }: { p: Post }) {
   return (
     <li>
       <a href={p.url} target="_blank" rel="noreferrer">{p.title}</a>
-      <span className="src">{sourceName(p.source)}，{md(p.posted_at)}{p.pushes > 0 && `，推 ${p.pushes}`}</span>
+      <span className="src">{sourceName(p.source)}，{md(p.posted_at)}{p.pushes > 0 && `，${platformOf(p.source) === 'threads' ? '讚' : '推'} ${p.pushes}`}</span>
     </li>
   );
 }
@@ -38,24 +38,28 @@ export default async function Forum({ searchParams }: { searchParams: Record<str
   let to = isDay(searchParams.to) ? searchParams.to! : today;
   let from = isDay(searchParams.from) ? searchParams.from! : addDays(to, -6);
   if (from > to) [from, to] = [to, from];
-  const src = SOURCES.find((s) => s.id === searchParams.src)?.id || '';
-  const lang = searchParams.lang === 'zh' || searchParams.lang === 'en' ? searchParams.lang : '';
+  const src = PLATFORMS.find((p) => p.key === searchParams.src)?.key || '';
   const db = adminDb();
   const posts = (await fetchAll((a, b) => {
     let q = db.from('ec_forum_posts').select('url,source,board,lang,title,excerpt,pushes,posted_at')
       .gte('posted_at', from + 'T00:00:00+08:00').lte('posted_at', to + 'T23:59:59+08:00');
-    if (src) q = q.eq('source', src);
-    if (lang) q = q.eq('lang', lang);
+    q = src ? q.in('source', SOURCE_IDS.filter((id) => platformOf(id) === src)) : q.in('source', SOURCE_IDS);
     return q.order('posted_at', { ascending: false }).order('url').range(a, b);
   }).catch(() => [])) as Post[];
-  const { data: first } = await db.from('ec_forum_posts').select('posted_at').order('first_seen').limit(1);
+  const { data: first } = await db.from('ec_forum_posts').select('posted_at').in('source', SOURCE_IDS).order('posted_at').limit(1);
   const a = analyze(posts);
-  const link = (patch: Record<string, string>) => '/forum?' + new URLSearchParams({ from, to, ...(src && { src }), ...(lang && { lang }), ...patch }).toString();
+  const link = (patch: Record<string, string>) => '/forum?' + new URLSearchParams({ from, to, ...(src && { src }), ...patch }).toString();
   const presets = [
     { label: '近 3 天', from: addDays(today, -2) }, { label: '近 7 天', from: addDays(today, -6) },
     { label: '近 30 天', from: addDays(today, -29) }, { label: '近 90 天', from: addDays(today, -89) },
   ];
-  const counts = SOURCES.map((s) => ({ s, n: posts.filter((p) => p.source === s.id).length }));
+  const counts = PLATFORMS.map((p) => ({ p, n: posts.filter((x) => platformOf(x.source) === p.key).length }));
+  // 各平台各自的熱門關鍵字
+  const perPlatform = PLATFORMS.map((p) => {
+    const ps = posts.filter((x) => platformOf(x.source) === p.key);
+    const top = analyze(ps).terms.flatMap((g) => g.list).sort((a, b) => b.n - a.n).slice(0, 10);
+    return { p, n: ps.length, top };
+  });
   const termMax = Math.max(1, ...a.terms.flatMap((g) => g.list.map((k) => k.n)));
   const otherMax = Math.max(1, ...a.other.map((k) => k.n));
 
@@ -64,7 +68,7 @@ export default async function Forum({ searchParams }: { searchParams: Record<str
       <section className="search-head">
         <h1 className="display">論壇美妝評論</h1>
         <p className="lede">
-          每天彙整 PTT 與 Reddit 的美妝保養討論，整理出大家在聊的關鍵字與議題。
+          每小時彙整 PTT、Dcard、Threads、Instagram、Facebook 上的台灣美妝保養討論，整理出大家在聊的關鍵字與議題。
           {first?.[0] && <>資料從 {md(first[0].posted_at)} 開始累積。</>}
         </p>
       </section>
@@ -72,15 +76,10 @@ export default async function Forum({ searchParams }: { searchParams: Record<str
       <form className="hist-form" action="/forum">
         <label>開始日期<input type="date" name="from" defaultValue={from} max={today} /></label>
         <label>結束日期<input type="date" name="to" defaultValue={to} max={today} /></label>
-        <label>來源
+        <label>平台
           <select name="src" defaultValue={src}>
             <option value="">全部</option>
-            {SOURCES.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </label>
-        <label>語言
-          <select name="lang" defaultValue={lang}>
-            <option value="">全部</option><option value="zh">中文（PTT）</option><option value="en">英文（Reddit）</option>
+            {PLATFORMS.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
           </select>
         </label>
         <button className="primary" type="submit">查詢</button>
@@ -90,11 +89,11 @@ export default async function Forum({ searchParams }: { searchParams: Record<str
       </div>
 
       <p className="foot">
-        {from} 到 {to}，共 {a.total} 篇討論。{counts.filter((c) => c.n).map((c) => `${c.s.name} ${c.n}`).join('、')}
+        {from} 到 {to}，共 {a.total} 篇討論。{counts.filter((c) => c.n).map((c) => `${c.p.name} ${c.n}`).join('、')}
       </p>
 
       {a.total === 0 ? (
-        <p className="empty">這段期間還沒有資料。每天 09:20 自動抓取，首次資料會在下一次更新後出現。</p>
+        <p className="empty">這段期間還沒有資料。每小時自動抓取，首次資料會在下一次更新後出現。</p>
       ) : (
         <>
           <section className="block">
@@ -104,6 +103,18 @@ export default async function Forum({ searchParams }: { searchParams: Record<str
                 <article key={g.group} className="plat-card"><h3>{g.group}</h3><Chips list={g.list} max={termMax} /></article>
               ))}
               {a.other.length > 0 && <article className="plat-card"><h3>其他常見詞</h3><Chips list={a.other.slice(0, 16)} max={otherMax} /></article>}
+            </div>
+          </section>
+
+          <section className="block">
+            <div className="block-head"><h2>各平台關鍵字</h2><p>各平台被提到最多的品牌、成分、肌膚問題與品類。</p></div>
+            <div className="platforms">
+              {perPlatform.map(({ p, n, top }) => (
+                <article key={p.key} className="plat-card">
+                  <h3>{p.name}<span className="count">{n} 篇</span></h3>
+                  {top.length ? <Chips list={top} max={Math.max(1, ...top.map((k) => k.n))} /> : <p className="none">這段期間沒有資料</p>}
+                </article>
+              ))}
             </div>
           </section>
 
@@ -136,12 +147,12 @@ export default async function Forum({ searchParams }: { searchParams: Record<str
           </section>
 
           <section className="block">
-            <div className="block-head"><h2>熱門文章</h2><p>PTT 以推文數排序；Reddit 的 RSS 不含分數，依發文時間排序。</p></div>
+            <div className="block-head"><h2>熱門文章</h2><p>PTT 以推文數、Threads 以按讚數排序；Dcard、IG、FB 取自搜尋摘要，沒有互動數。</p></div>
             <ul className="news top-list">{a.top.map((p) => <PostLine key={p.url} p={p} />)}</ul>
           </section>
         </>
       )}
-      <p className="foot">來源：PTT（經 PTT 網頁版 pttweb.cc 讀取，因為 PTT 本站會擋雲端主機）與 Reddit RSS。Dcard、Mobile01 擋雲端連線，目前無法抓取。關鍵字與議題由規則與斷詞自動歸類，僅供趨勢參考。</p>
+      <p className="foot">來源：PTT 經 PTT 網頁版讀取；Threads 讀取公開搜尋結果；Dcard、Instagram、Facebook 會擋雲端主機或需要登入，改用搜尋引擎近一週收錄的貼文標題與摘要，只涵蓋公開且被收錄的貼文。關鍵字與議題由規則與斷詞自動歸類，僅供趨勢參考。</p>
     </main>
   );
 }

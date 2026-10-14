@@ -66,11 +66,27 @@ export function parseBiggo(html: string, allStores = false): BiggoItem[] {
   return out;
 }
 
-export async function searchBiggo(q: string, allStores = false): Promise<{ status: number; items: BiggoItem[] }> {
-  const r = await fetch(`https://biggo.com.tw/s/${encodeURIComponent(q)}/`, {
-    headers: { 'User-Agent': UA, 'Accept-Language': 'zh-TW,zh;q=0.9', Accept: 'text/html' },
-    cache: 'no-store',
-  });
-  const html = await r.text();
-  return { status: r.status, items: r.ok ? parseBiggo(html, allStores) : [] };
+async function fetchBiggo(url: string, viaProxy: boolean) {
+  const target = viaProxy ? `https://r.jina.ai/${url}` : url;
+  const headers: Record<string, string> = { 'User-Agent': UA, 'Accept-Language': 'zh-TW,zh;q=0.9', Accept: 'text/html' };
+  if (viaProxy) headers['X-Return-Format'] = 'html';
+  const r = await fetch(target, { headers, cache: 'no-store', signal: AbortSignal.timeout(viaProxy ? 20000 : 12000) });
+  return { status: r.status, html: r.ok ? await r.text() : '' };
+}
+
+// 直連 BigGo 失敗（被擋或回空頁）時，改經由網頁轉讀服務 r.jina.ai 再試一次
+export async function searchBiggo(q: string, allStores = false): Promise<{ status: number; items: BiggoItem[]; via?: string }> {
+  const url = `https://biggo.com.tw/s/${encodeURIComponent(q)}/`;
+  let first = { status: -1, items: [] as BiggoItem[] };
+  try {
+    const r = await fetchBiggo(url, false);
+    first = { status: r.status, items: r.status === 200 ? parseBiggo(r.html, allStores) : [] };
+    if (first.status === 200 && first.items.length) return first;
+  } catch {}
+  try {
+    const r = await fetchBiggo(url, true);
+    const items = r.status === 200 ? parseBiggo(r.html, allStores) : [];
+    if (items.length) return { status: 200, items, via: 'proxy' };
+  } catch {}
+  return first;
 }

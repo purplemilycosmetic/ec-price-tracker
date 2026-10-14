@@ -7,6 +7,7 @@ import { fetchAllOfficial } from './official';
 import { BIGGO_QUERIES, searchBiggo, type BiggoItem } from './biggo';
 import { fetchNews } from './news';
 import { logPromos, archiveBanners } from './archive';
+import { jobLog, logJob } from './jobs';
 
 // 抓取所有啟用中的商品頁並寫入當日價格
 export async function runUpdate(onlyIds?: number[]) {
@@ -126,7 +127,8 @@ export async function runNews(day: string) {
 }
 
 // 蝦皮商城、酷澎：從 BigGo 搜尋結果整批更新（搜尋同時進行、資料庫整批寫入，避免超過執行時間）
-export async function runBiggo(day: string) {
+export async function runBiggo(day: string, opts: { onlyPending?: boolean; budgetMs?: number } = {}) {
+  const budget = opts.budgetMs ?? 45000;
   const db = adminDb();
   const found = new Map<string, BiggoItem>();
   let searchFailed = 0;
@@ -143,13 +145,18 @@ export async function runBiggo(day: string) {
   // 網址 → 使用者指定的產品（自訂追蹤或自建產品）；內建產品由標題自動判斷
   const customLine = new Map((customs || []).filter((c) => c.line && !productOf(c.line)).map((c) => [c.url as string, c.line as string]));
   const customUrls = new Set(Array.from(customLine.keys()));
-  const queries = Array.from(new Set([...BIGGO_QUERIES, ...(watch || []).map((w) => w.query), ...userProducts.flatMap((u) => u.queries)]));
+  let queries = Array.from(new Set([...BIGGO_QUERIES, ...(watch || []).map((w) => w.query), ...userProducts.flatMap((u) => u.queries)]));
+  // 每小時補抓：今天已經抓到資料的關鍵字跳過，只重抓失敗的
+  const log = await jobLog(day, 'biggo:');
+  if (opts.onlyPending) queries = queries.filter((q) => !log.get('biggo:' + q)?.ok && (log.get('biggo:' + q)?.attempts ?? 0) < 24);
+  let skipped = 0;
   for (const q of queries) {
-    if (Date.now() - t0 > 45000) break; // 保留時間給資料庫寫入
+    if (Date.now() - t0 > budget) { skipped++; continue; } // 保留時間給資料庫寫入，剩下的下一小時再抓
     let r = await searchBiggo(q).catch((e) => ({ status: -1, items: [] as any[], err: String(e) }));
-    if (r.status !== 200 && Date.now() - t0 < 25000) { await new Promise((res) => setTimeout(res, 3000)); r = await searchBiggo(q).catch(() => ({ status: -1, items: [] as any[] })); }
+    if ((r.status !== 200 || !r.items.length) && Date.now() - t0 < budget - 15000) { await new Promise((res) => setTimeout(res, 3000)); r = await searchBiggo(q).catch(() => ({ status: -1, items: [] as any[] })); }
     statuses[r.status] = (statuses[r.status] || 0) + 1;
     results.push(r);
+    await logJob(day, 'biggo:' + q, { ok: r.status === 200 && r.items.length > 0, status: r.status, items: r.items.length }, log);
     await new Promise((res) => setTimeout(res, 1500));
   }
   for (const { status, items } of results) {
@@ -163,7 +170,7 @@ export async function runBiggo(day: string) {
     }
   }
   const items = Array.from(found.values());
-  if (!items.length) return { biggo_found: 0, biggo_search_failed: searchFailed, biggo_status: statuses };
+  if (!items.length) return { biggo_found: 0, biggo_queries: queries.length, biggo_skipped: skipped, biggo_search_failed: searchFailed, biggo_status: statuses };
 
   // 新商品加入、既有商品更新標題與規格（不會動到手動停用的設定）
   const rows = items.map((i) => {
@@ -183,5 +190,5 @@ export async function runBiggo(day: string) {
       final_price: i.price, sale_price: i.price, promos: i.promos, in_stock: true, error: '來源：BigGo',
     }));
   if (snaps.length) await db.from('ec_price_snapshots').upsert(snaps, { onConflict: 'listing_id,captured_on' });
-  return { biggo_found: snaps.length, biggo_search_failed: searchFailed, biggo_status: statuses };
+  return { biggo_found: snaps.length, biggo_queries: queries.length, biggo_skipped: skipped, biggo_search_failed: searchFailed, biggo_status: statuses };
 }
