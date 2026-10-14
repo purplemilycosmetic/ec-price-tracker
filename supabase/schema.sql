@@ -45,3 +45,20 @@ create table if not exists ec_custom_products (
 );
 alter table ec_custom_products enable row level security;
 create policy "ec read custom products" on ec_custom_products for select using (true);
+
+-- 論壇美妝評論（PTT、Reddit），每天累積；關鍵字與議題在顯示時即時分析
+create table if not exists ec_forum_posts (
+  url text primary key,
+  source text not null,
+  board text,
+  lang text not null default 'zh',
+  title text not null,
+  excerpt text,
+  pushes int not null default 0,
+  posted_at timestamptz not null,
+  first_seen date not null default ((now() at time zone 'Asia/Taipei')::date),
+  last_seen date not null default ((now() at time zone 'Asia/Taipei')::date)
+);
+create index if not exists ec_forum_posts_posted on ec_forum_posts (posted_at desc);
+alter table ec_forum_posts enable row level security;
+create policy "ec read forum posts" on ec_forum_posts for select using (true);

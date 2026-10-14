@@ -55,6 +55,15 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
   useEffect(() => { try { const k = localStorage.getItem('ec-tab'); if (k && tabs.some((t) => t.key === k)) setTabKey(k); } catch {} }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { try { localStorage.setItem('ec-tab', tabKey); } catch {} }, [tabKey]);
   const [open, setOpen] = useState<string | null>(null);
+  async function renameProduct(product: string, cur: string) {
+    const name = window.prompt('新的產品名稱', cur);
+    if (!name || name.trim() === cur) return;
+    let key = ''; try { key = localStorage.getItem('ec-admin-key') || ''; } catch {}
+    if (!key) key = window.prompt('輸入管理密碼') || '';
+    if (!key) return;
+    const r = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, action: 'rename', product, name }) });
+    if (r.ok) { try { localStorage.setItem('ec-admin-key', key); } catch {} window.location.reload(); } else window.alert('改名失敗，請確認管理密碼');
+  }
   async function removeProduct(product: string, name: string) {
     if (!window.confirm(`停止追蹤「${name}」？已存的歷史價格仍可在「歷史查詢」看到。`)) return;
     let key = ''; try { key = localStorage.getItem('ec-admin-key') || ''; } catch {}
@@ -188,7 +197,8 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
             {official?.official_url && <span className="note">官網不直接販售，無官網售價</span>}
           </div>
           {isUserKey(tab.key) && (
-            <div className="hero-links"><button className="btn-quiet" onClick={() => removeProduct(tab.key, tab.name)}>停止追蹤這個產品</button></div>
+            <div className="hero-links"><button className="btn-quiet" onClick={() => renameProduct(tab.key, tab.name)}>修改名稱</button>
+              <button className="btn-quiet" onClick={() => removeProduct(tab.key, tab.name)}>停止追蹤這個產品</button></div>
           )}
           <div className="hero-stats">
             追蹤 {tabListings.length} 個商品頁、{rows.length} 種規格，資料日期 {lastDay ?? '—'}{lastDay && lastDay !== today ? '（今日 09:00 更新尚未完成）' : ''}

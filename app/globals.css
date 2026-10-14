@@ -262,3 +262,11 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px
 .tile-add { text-decoration: none; color: var(--muted); display: flex; align-items: center; justify-content: center; border-style: dashed; }
 .tile-add:hover { color: var(--ink); }
 .btn-quiet { border: 0; background: none; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; padding: 0; }
+
+/* 論壇關鍵字 */
+.kw { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.kw li { display: grid; grid-template-columns: minmax(84px, 40%) 1fr 32px; gap: 8px; align-items: center; font-size: 14px; }
+.kw-bar { height: 8px; background: var(--rule); border-radius: 4px; overflow: hidden; }
+.kw-bar span { display: block; height: 100%; background: var(--ink); opacity: .55; border-radius: 4px; }
+.kw-n { text-align: right; color: var(--muted); }
+.top-list { max-width: 760px; }

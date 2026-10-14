@@ -17,6 +17,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '管理密碼錯誤' }, { status: 401 });
   const db = adminDb();
 
+  if (body.action === 'rename') {
+    if (!isUserKey(body.product)) return NextResponse.json({ error: '只能改自建產品的名稱' }, { status: 400 });
+    const nm = String(body.name || '').trim().slice(0, 40);
+    if (!nm) return NextResponse.json({ error: '名稱不能空白' }, { status: 400 });
+    const patch: Record<string, unknown> = { name: nm, short: nm.length > 14 ? nm.slice(0, 14) + '…' : nm };
+    if (typeof body.brand === 'string') patch.brand = body.brand.trim().slice(0, 20) || null;
+    await db.from('ec_custom_products').update(patch).eq('key', body.product);
+    return NextResponse.json({ ok: true });
+  }
+
   if (body.action === 'remove') {
     if (!isUserKey(body.product)) return NextResponse.json({ error: '只能停止自建產品' }, { status: 400 });
     await db.from('ec_custom_products').update({ active: false }).eq('key', body.product);

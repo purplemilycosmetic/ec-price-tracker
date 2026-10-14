@@ -28,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="nav">
               <a href="/">追蹤產品</a>
               <a href="/new">新增產品</a>
+              <a href="/forum">論壇評論</a>
               <a href="/history">歷史查詢</a>
               <a href="/admin">管理</a>
             </nav>
