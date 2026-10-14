@@ -1,6 +1,6 @@
 import { adminDb, todayTaipei, addDays, fetchAll } from '@/lib/db';
 import { analyze, mentions, type Post, type Counted } from '@/lib/forumAnalysis';
-import { PLATFORMS, SOURCE_IDS, platformOf, sourceName } from '@/lib/forum';
+import { PLATFORMS, SOURCE_IDS, platformOf, sourceName, keepPost, tidy } from '@/lib/forum';
 import { PRODUCTS } from '@/lib/classify';
 
 export const dynamic = 'force-dynamic';
@@ -40,12 +40,13 @@ export default async function Forum({ searchParams }: { searchParams: Record<str
   if (from > to) [from, to] = [to, from];
   const src = PLATFORMS.find((p) => p.key === searchParams.src)?.key || '';
   const db = adminDb();
-  const posts = (await fetchAll((a, b) => {
+  const raw = (await fetchAll((a, b) => {
     let q = db.from('ec_forum_posts').select('url,source,board,lang,title,excerpt,pushes,posted_at')
       .gte('posted_at', from + 'T00:00:00+08:00').lte('posted_at', to + 'T23:59:59+08:00');
     q = src ? q.in('source', SOURCE_IDS.filter((id) => platformOf(id) === src)) : q.in('source', SOURCE_IDS);
     return q.order('posted_at', { ascending: false }).order('url').range(a, b);
   }).catch(() => [])) as Post[];
+  const posts = raw.filter(keepPost).map((p) => ({ ...p, title: tidy(p.title), excerpt: p.excerpt && tidy(p.excerpt) }));
   const { data: first } = await db.from('ec_forum_posts').select('posted_at').in('source', SOURCE_IDS).order('posted_at').limit(1);
   const a = analyze(posts);
   const link = (patch: Record<string, string>) => '/forum?' + new URLSearchParams({ from, to, ...(src && { src }), ...patch }).toString();

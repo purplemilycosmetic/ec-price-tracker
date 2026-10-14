@@ -38,6 +38,16 @@ export const sourceName = (id: string) => SOURCE_NAMES[id] ?? id;
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
 const decode = (s: string) => s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ');
 const stripTags = (s: string) => decode(decode(s).replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+// 簡體字比例高的貼文（多半不是台灣用戶）不收
+const SIMP = /[这们说对发现护肤为个时会后过还没让给觉买卖亲爱钱价问题图听读写实际应该装经验团购级产标质]/g;
+export const isSimplified = (t: string) => (t.match(SIMP) || []).length >= 2;
+// 顯示前再過濾一次（早期存進資料庫、還沒套用過濾規則的貼文）
+export const keepPost = (p: { source: string; title: string; excerpt: string | null }) => {
+  if (p.source.startsWith('ptt')) return true;
+  const t = p.title + ' ' + (p.excerpt || '');
+  return BEAUTY.test(t) && !isSimplified(t);
+};
+export const tidy = (t: string) => t.replace(/!?Image \d+/g, ' ').replace(/\s+/g, ' ').trim();
 const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
 
 export type RawPost = { url: string; source: string; board: string | null; lang: string; title: string; excerpt?: string; pushes: number; posted_at: string };
@@ -78,8 +88,8 @@ export function parseThreads(md: string, q: string): RawPost[] {
     const body = b.slice((um.index ?? 0) + um[0].length).split(/\n\s*Translate\s*\n/)[0];
     const lines = body.split('\n').map((l) => l.trim())
       .filter((l) => l && !/^!\[|^\[!\[|^\d[\d,.萬K]*$|^\[.*\]\(https?:\/\/[^)]+\)$/.test(l));
-    const text = lines.join(' ').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\s+/g, ' ').trim();
-    if (text.length < 4) continue;
+    const text = lines.join(' ').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/!?Image \d+(: [^!]*)?/g, ' ').replace(/\s+/g, ' ').trim();
+    if (text.length < 6 || !BEAUTY.test(text) || isSimplified(text)) continue; // Threads 搜尋比較寬鬆，只留美妝相關的繁體貼文
     const nums = (b.split(/\n\s*Translate\s*\n/)[1] || '').split('\n').map((l) => l.trim()).filter((l) => /^\d[\d,]*$/.test(l)).map((l) => +l.replace(/,/g, ''));
     out.push({ url: `https://www.threads.net/@${user}#${hash(text)}`, source: 'threads', board: q, lang: 'zh',
       title: text.slice(0, 80), excerpt: text.slice(0, 400), pushes: nums[0] || 0, posted_at: now });
@@ -100,7 +110,7 @@ export function parseDdg(md: string, site: (typeof SITES)[number], q: string): R
     const texts = Array.from(b.matchAll(/\[([^\]]{8,})\]\(https:\/\/duckduckgo\.com\/l\//g)).map((m) => m[1]).filter((t) => !/^!\[|^www\.|^[a-z]+\.[a-z]/.test(t));
     const snippet = decode(texts.sort((x, y) => y.length - x.length)[0] || '');
     const t = title.replace(/\s*[|\-–]\s*(Dcard|Facebook|Instagram).*$/i, '').trim();
-    if (!BEAUTY.test(t + snippet)) continue; // 例如 FB 的「機車保養」
+    if (!BEAUTY.test(t + snippet) || isSimplified(t + snippet)) continue; // 例如 FB 的「機車保養」
     out.push({ url, source: site.id, board: q, lang: 'zh', title: t.slice(0, 120), excerpt: snippet.slice(0, 400), pushes: 0,
       posted_at: date ? new Date(date + 'T12:00:00+08:00').toISOString() : new Date().toISOString() });
   }
