@@ -69,7 +69,7 @@ export async function runForum() {
     try {
       const url = s.kind === 'ptt' ? `https://www.pttweb.cc/bbs/${s.board}` : `https://www.reddit.com/r/${s.board}/top/.rss?t=day`;
       let r = await get(url);
-      if (r.status !== 200 && s.kind === 'reddit') { await new Promise((ok) => setTimeout(ok, 2500)); r = await get(url); }
+      for (let i = 0; i < 2 && r.status !== 200 && s.kind === 'reddit'; i++) { await new Promise((ok) => setTimeout(ok, 3000)); r = await get(url); }
       const posts = r.status === 200 ? (s.kind === 'ptt' ? parsePtt(r.text, s) : parseReddit(r.text, s)) : [];
       stats[s.id] = r.status === 200 ? posts.length : -r.status;
       all.push(...posts);
