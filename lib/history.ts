@@ -3,6 +3,7 @@ import { adminDb, fetchAll, todayTaipei, addDays } from './db';
 import { PRODUCTS, CUSTOM } from './classify';
 import { SITEWIDE_LINE } from './promo';
 import { cleanNews } from './news';
+import { isUserKey } from './custom';
 
 export type HistoryQuery = { product: string; from: string; to: string };
 
@@ -10,7 +11,7 @@ const isDay = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 export function parseQuery(sp: Record<string, string | undefined>): HistoryQuery {
   const today = todayTaipei();
-  const product = [...PRODUCTS.map((p) => p.key), CUSTOM].includes(sp.product || '') ? sp.product! : PRODUCTS[0].key;
+  const product = [...PRODUCTS.map((p) => p.key), CUSTOM].includes(sp.product || '') || isUserKey(sp.product) ? sp.product! : PRODUCTS[0].key;
   let to = isDay(sp.to) ? sp.to! : today;
   let from = isDay(sp.from) ? sp.from! : addDays(to, -29);
   if (from > to) [from, to] = [to, from];

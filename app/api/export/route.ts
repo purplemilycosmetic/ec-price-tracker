@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { parseQuery, loadHistory } from '@/lib/history';
 import { productOf } from '@/lib/classify';
+import { loadUserProducts } from '@/lib/custom';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -25,7 +26,8 @@ export async function GET(req: NextRequest) {
       (s.promos || []).map((p) => (p.period ? `${p.text}（${p.period}）` : p.text)).join('；'), l.title ?? '', l.url,
     ].map(cell).join(','));
   }
-  const name = `${productOf(q.product)?.short ?? '自訂追蹤'}_${q.from}_${q.to}.csv`;
+  const uname = (await loadUserProducts(true)).find((u) => u.key === q.product)?.name;
+  const name = `${productOf(q.product)?.short ?? uname ?? '自訂追蹤'}_${q.from}_${q.to}.csv`;
   // 加 BOM，Excel 開中文才不會亂碼
   return new Response('﻿' + lines.join('\r\n'), {
     headers: {

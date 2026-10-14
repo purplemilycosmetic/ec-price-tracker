@@ -1,6 +1,7 @@
 import { adminDb, todayTaipei } from './db';
 import { scrape } from './scrapers';
-import { classify, CUSTOM, PRODUCTS } from './classify';
+import { classify, CUSTOM, PRODUCTS, productOf } from './classify';
+import { isUserKey, loadUserProducts } from './custom';
 import { searchMomo } from './momoSearch';
 import { fetchAllOfficial } from './official';
 import { BIGGO_QUERIES, searchBiggo, type BiggoItem } from './biggo';
@@ -32,7 +33,7 @@ export async function runUpdate(onlyIds?: number[]) {
       const r = await scrape(l.platform, l.url);
       if (r.title && r.status === 'ok') {
         const c = classify(r.title);
-        const custom = l.line === CUSTOM;
+        const custom = l.line === CUSTOM || isUserKey(l.line); // 自訂與使用者自建產品：不自動改分類
         const patch: any = { title: r.title, spec: c.spec ?? l.spec, image_url: r.image ?? l.image_url };
         if (!custom) {
           // 每次都依最新的產品定義重新分類；不屬於追蹤產品的商品頁（例如防曬）自動停用
@@ -134,12 +135,15 @@ export async function runBiggo(day: string) {
   const results: { status: number; items: any[] }[] = [];
   const t0 = Date.now();
   // 自行搜尋加入追蹤的商品：用當初的關鍵字每天再搜一次，依網址對回
-  const [{ data: watch }, { data: customs }] = await Promise.all([
+  const [{ data: watch }, { data: customs }, userProducts] = await Promise.all([
     db.from('ec_watch_queries').select('query'),
-    db.from('ec_listings').select('url').eq('line', CUSTOM).eq('active', true).in('platform', ['shopee', 'coupang']),
+    db.from('ec_listings').select('url,line').eq('active', true).in('platform', ['shopee', 'coupang']),
+    loadUserProducts(),
   ]);
-  const customUrls = new Set((customs || []).map((c) => c.url));
-  const queries = Array.from(new Set([...BIGGO_QUERIES, ...(watch || []).map((w) => w.query)]));
+  // 網址 → 使用者指定的產品（自訂追蹤或自建產品）；內建產品由標題自動判斷
+  const customLine = new Map((customs || []).filter((c) => c.line && !productOf(c.line)).map((c) => [c.url as string, c.line as string]));
+  const customUrls = new Set(Array.from(customLine.keys()));
+  const queries = Array.from(new Set([...BIGGO_QUERIES, ...(watch || []).map((w) => w.query), ...userProducts.flatMap((u) => u.queries)]));
   for (const q of queries) {
     if (Date.now() - t0 > 45000) break; // 保留時間給資料庫寫入
     let r = await searchBiggo(q).catch((e) => ({ status: -1, items: [] as any[], err: String(e) }));
@@ -164,8 +168,9 @@ export async function runBiggo(day: string) {
   // 新商品加入、既有商品更新標題與規格（不會動到手動停用的設定）
   const rows = items.map((i) => {
     const c = classify(i.title);
-    const custom = customUrls.has(i.url) && !c.line;
-    return { platform: i.platform, url: i.url, title: i.title, brand: custom ? undefined : c.brand, line: custom ? CUSTOM : c.line, spec: c.spec, image_url: i.image ?? null };
+    const cl = customLine.get(i.url);
+    const keep = cl && (isUserKey(cl) || !c.line); // 自建產品一律保留；舊的「自訂」若現在對得上內建產品就歸過去
+    return { platform: i.platform, url: i.url, title: i.title, brand: keep ? undefined : c.brand, line: keep ? cl : c.line, spec: c.spec, image_url: i.image ?? null };
   });
   const { data: saved, error } = await db.from('ec_listings').upsert(rows, { onConflict: 'url' }).select('id,url,active');
   if (error) throw error;

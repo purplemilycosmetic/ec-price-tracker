@@ -2,6 +2,7 @@ import { parseQuery, loadHistory } from '@/lib/history';
 import { PRODUCTS, CUSTOM, productOf, productLabel } from '@/lib/classify';
 import { todayTaipei, addDays } from '@/lib/db';
 import { SITEWIDE_LINE } from '@/lib/promo';
+import { loadUserProducts } from '@/lib/custom';
 import TrendChart from '../TrendChart';
 
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,8 @@ export default async function History({ searchParams }: { searchParams: Record<s
   const h = await loadHistory(q);
   const today = todayTaipei();
   const product = productOf(q.product);
+  const userProducts = await loadUserProducts(true);
+  const title = product ? productLabel(product) : userProducts.find((u) => u.key === q.product)?.name ?? '自訂追蹤';
   const link = (patch: Record<string, string>) => '/history?' + new URLSearchParams({ product: q.product, from: q.from, to: q.to, ...patch }).toString();
   const presets = [
     { label: '近 7 天', from: addDays(today, -6) },
@@ -84,6 +87,7 @@ export default async function History({ searchParams }: { searchParams: Record<s
         <label>產品
           <select name="product" defaultValue={q.product}>
             {PRODUCTS.map((p) => <option key={p.key} value={p.key}>{productLabel(p)}</option>)}
+            {userProducts.map((u) => <option key={u.key} value={u.key}>{u.name}（自建）</option>)}
             <option value={CUSTOM}>自訂追蹤</option>
           </select>
         </label>
@@ -99,7 +103,7 @@ export default async function History({ searchParams }: { searchParams: Record<s
 
       <section className="block">
         <div className="block-head">
-          <h2>{product ? productLabel(product) : '自訂追蹤'}｜{q.from} 到 {q.to}</h2>
+          <h2>{title}｜{q.from} 到 {q.to}</h2>
           <p>{days.length ? `這段期間有 ${days.length} 天的價格資料。` : '這段期間沒有價格資料。'}</p>
           {days.length > 0 && <a className="btn-add export" href={`/api/export?${new URLSearchParams({ product: q.product, from: q.from, to: q.to })}`}>下載 CSV</a>}
         </div>

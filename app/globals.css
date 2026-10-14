@@ -252,3 +252,13 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px
   .result-side { grid-column: 2; flex-direction: row; align-items: center; justify-content: space-between; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* 新增產品 */
+.pick { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.pick input { width: auto; margin-top: 4px; flex: none; }
+.pick .result-title { display: block; }
+.new-box { max-width: 640px; }
+.new-box label { display: block; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.tile-add { text-decoration: none; color: var(--muted); display: flex; align-items: center; justify-content: center; border-style: dashed; }
+.tile-add:hover { color: var(--ink); }
+.btn-quiet { border: 0; background: none; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; padding: 0; }

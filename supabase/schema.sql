@@ -32,3 +32,16 @@ alter table ec_listings enable row level security;
 alter table ec_price_snapshots enable row level security;
 create policy "ec read listings" on ec_listings for select using (true);
 create policy "ec read snapshots" on ec_price_snapshots for select using (true);
+
+-- 使用者自建的追蹤產品（跨平台）。listings.line 存 key（u- 開頭）
+create table if not exists ec_custom_products (
+  key text primary key,
+  brand text,
+  name text not null,
+  short text not null,
+  queries text[] not null default '{}',
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table ec_custom_products enable row level security;
+create policy "ec read custom products" on ec_custom_products for select using (true);

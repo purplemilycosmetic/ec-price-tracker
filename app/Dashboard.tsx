@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { PRODUCTS, CUSTOM } from '@/lib/classify';
 import TrendChart from './TrendChart';
 import { SITEWIDE } from '@/lib/promo';
+import { isUserKey, type UserProduct } from '@/lib/custom';
 
 export type Listing = {
   id: number; brand: string | null; line: string | null; spec: string | null; platform: string;
@@ -42,17 +43,26 @@ function Img({ src, alt, className }: { src: string | null | undefined; alt: str
   return <img className={className} src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" />;
 }
 
-export default function Dashboard({ listings, snaps, events, officials, today }: {
-  listings: Listing[]; snaps: Snap[]; events: PlatformEvent[]; officials: OfficialProduct[]; today: string;
+export default function Dashboard({ listings, snaps, events, officials, today, userProducts }: {
+  listings: Listing[]; snaps: Snap[]; events: PlatformEvent[]; officials: OfficialProduct[]; today: string; userProducts: UserProduct[];
 }) {
   const hasCustom = listings.some((l) => l.line === CUSTOM);
-  const tabs = [...PRODUCTS.map((p) => ({ key: p.key, brand: p.brand.split(' ')[0], name: p.name, short: p.short })),
-    ...(hasCustom ? [{ key: CUSTOM, brand: '自訂', name: '自行搜尋加入的商品', short: '自訂追蹤' }] : [])];
+  const tabs = [...PRODUCTS.map((p) => ({ key: p.key, brand: p.brand.split(' ')[0], full: p.brand, name: p.name, short: p.short })),
+    ...userProducts.map((u) => ({ key: u.key, brand: u.brand || '自建', full: u.brand || '自建產品', name: u.name, short: u.short })),
+    ...(hasCustom ? [{ key: CUSTOM, brand: '自訂', full: '自訂追蹤', name: '自行搜尋加入的商品', short: '自訂追蹤' }] : [])];
   const [tabKey, setTabKey] = useState(tabs[0].key);
   // 記住上次看的產品（只是這台裝置的偏好，讀不到就用第一個）
   useEffect(() => { try { const k = localStorage.getItem('ec-tab'); if (k && tabs.some((t) => t.key === k)) setTabKey(k); } catch {} }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { try { localStorage.setItem('ec-tab', tabKey); } catch {} }, [tabKey]);
   const [open, setOpen] = useState<string | null>(null);
+  async function removeProduct(product: string, name: string) {
+    if (!window.confirm(`停止追蹤「${name}」？已存的歷史價格仍可在「歷史查詢」看到。`)) return;
+    let key = ''; try { key = localStorage.getItem('ec-admin-key') || ''; } catch {}
+    if (!key) key = window.prompt('輸入管理密碼') || '';
+    if (!key) return;
+    const r = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, action: 'remove', product }) });
+    if (r.ok) window.location.reload(); else window.alert('操作失敗，請確認管理密碼');
+  }
   const [trendSpec, setTrendSpec] = useState<string | null>(null);
   const tab = tabs.find((t) => t.key === tabKey) ?? tabs[0];
   const official = officials.find((o) => o.key === tab.key);
@@ -70,7 +80,7 @@ export default function Dashboard({ listings, snaps, events, officials, today }:
   const tabListings = useMemo(() => listings.filter((l) => l.line === tab.key && PLATFORMS.some((p) => p.key === l.platform)), [listings, tab.key]);
   const rows = useMemo(() => {
     const groups = new Map<string, Listing[]>();
-    for (const l of tabListings) { const k = tab.key === CUSTOM ? (l.title || l.url) : specKey(l.spec); if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(l); }
+    for (const l of tabListings) { const k = tab.key === CUSTOM || (isUserKey(tab.key) && !l.spec) ? (l.title || l.url) : specKey(l.spec); if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(l); }
     return Array.from(groups.entries()).sort((a, b) => specSort(a[0], b[0]));
   }, [tabListings, tab.key]);
 
@@ -159,13 +169,14 @@ export default function Dashboard({ listings, snaps, events, officials, today }:
             <span className="tile-name">{t.short}</span>
           </button>
         ))}
+        <a className="tile tile-add" href="/new">＋ 新增產品</a>
       </nav>
 
       {/* 產品卡 */}
       <section className="hero">
         <Img src={heroImage} alt={tab.name} className="hero-img" />
         <div className="hero-body">
-          <div className="hero-brand">{tab.brand === '自訂' ? '自訂追蹤' : PRODUCTS.find((p) => p.key === tab.key)?.brand}</div>
+          <div className="hero-brand">{tab.full}</div>
           <h1 className="display">{official?.official_name || tab.name}</h1>
           <div className="hero-links">
             {official?.official_url && <a href={official.official_url} target="_blank" rel="noreferrer">品牌官網</a>}
@@ -176,6 +187,9 @@ export default function Dashboard({ listings, snaps, events, officials, today }:
             ) : null}
             {official?.official_url && <span className="note">官網不直接販售，無官網售價</span>}
           </div>
+          {isUserKey(tab.key) && (
+            <div className="hero-links"><button className="btn-quiet" onClick={() => removeProduct(tab.key, tab.name)}>停止追蹤這個產品</button></div>
+          )}
           <div className="hero-stats">
             追蹤 {tabListings.length} 個商品頁、{rows.length} 種規格，資料日期 {lastDay ?? '—'}{lastDay && lastDay !== today ? '（今日 09:00 更新尚未完成）' : ''}
           </div>
