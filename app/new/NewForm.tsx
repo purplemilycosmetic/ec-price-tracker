@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type Hit = { platform: string; title: string; url: string; price: number; image: string | null; spec: string | null; match: boolean };
 const NAMES: Record<string, string> = { momo: 'momo', shopee: '蝦皮商城', coupang: '酷澎' };
@@ -13,24 +13,31 @@ export default function NewForm({ name, query, hits }: { name: string; query: st
   const [queries, setQueries] = useState(query);
   const [must, setMust] = useState(name);
   const [exclude, setExclude] = useState('');
-  const [key, setKey] = useState(readKey());
+  const [key, setKey] = useState('');
+  const keyRef = useRef<HTMLInputElement>(null);
+  // 記住的密碼在載入後才讀（避免伺服器與瀏覽器畫面不一致）
+  useEffect(() => { const k = readKey(); if (k) setKey(k); }, []);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const toggle = (u: string) => setSel((s) => { const n = new Set(s); if (n.has(u)) n.delete(u); else n.add(u); return n; });
 
   async function submit() {
-    setBusy(true); setMsg('建立中，並立即抓取一次（約需 10–30 秒）…');
+    // 瀏覽器自動填入的密碼不一定會通知網頁，直接讀欄位裡的值
+    const k = (keyRef.current?.value || key).trim();
+    if (!k) { setMsg('請輸入管理密碼'); keyRef.current?.focus(); return; }
+    if (!sel.size && !urls.trim() && !must.trim()) { setMsg('請至少勾選一個商品、貼上網址，或填寫「標題必須包含」'); return; }
+    setBusy(true); setMsg('建立中，並立即抓取一次（約需 10–40 秒），請稍候…');
     const items = hits.filter((h) => sel.has(h.url)).map((h) => ({ url: h.url, title: h.title, price: h.price, image: h.image }));
     const r = await fetch('/api/products', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, name, brand, queries, must, exclude, items, urls }),
+      body: JSON.stringify({ key: k, name, brand, queries, must, exclude, items, urls }),
     });
     const j = await r.json().catch(() => ({}));
     setBusy(false);
     if (r.ok) {
-      try { localStorage.setItem(KEY, key); localStorage.setItem('ec-tab', j.product); } catch {}
+      try { localStorage.setItem(KEY, k); localStorage.setItem('ec-tab', j.product); } catch {}
       window.location.href = '/';
-    } else setMsg(j.error || '建立失敗');
+    } else setMsg(j.error || (r.status >= 500 ? '伺服器處理逾時，產品可能已建立，請回首頁確認' : '建立失敗'));
   }
 
   return (
@@ -77,11 +84,11 @@ export default function NewForm({ name, query, hits }: { name: string; query: st
         <label>標題排除（用空白分隔）</label>
         <input value={exclude} onChange={(e) => setExclude(e.target.value)} placeholder="例如：試用 贈品 旅行組" />
         <label>管理密碼</label>
-        <input type="password" value={key} onChange={(e) => setKey(e.target.value)} />
+        <input ref={keyRef} type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="current-password" />
         <div style={{ marginTop: 16 }}>
-          <button className="primary" disabled={busy || !key || (!sel.size && !urls.trim() && !must.trim())} onClick={submit}>{busy ? '處理中…' : `建立「${name}」並開始追蹤`}</button>
+          <button className="primary" disabled={busy} onClick={submit}>{busy ? '處理中…' : `建立「${name}」並開始追蹤`}</button>
         </div>
-        {msg && <p>{msg}</p>}
+        {msg && <p className="form-msg" role="status">{msg}</p>}
       </section>
     </div>
   );
