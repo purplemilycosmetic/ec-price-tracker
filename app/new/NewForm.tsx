@@ -10,6 +10,9 @@ export default function NewForm({ name, query, hits }: { name: string; query: st
   const [sel, setSel] = useState<Set<string>>(new Set(hits.filter((h) => h.match).map((h) => h.url)));
   const [urls, setUrls] = useState('');
   const [brand, setBrand] = useState('');
+  const [queries, setQueries] = useState(query);
+  const [must, setMust] = useState(name);
+  const [exclude, setExclude] = useState('');
   const [key, setKey] = useState(readKey());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -20,7 +23,7 @@ export default function NewForm({ name, query, hits }: { name: string; query: st
     const items = hits.filter((h) => sel.has(h.url)).map((h) => ({ url: h.url, title: h.title, price: h.price, image: h.image }));
     const r = await fetch('/api/products', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, name, brand, query, items, urls }),
+      body: JSON.stringify({ key, name, brand, queries, must, exclude, items, urls }),
     });
     const j = await r.json().catch(() => ({}));
     setBusy(false);
@@ -65,10 +68,18 @@ export default function NewForm({ name, query, hits }: { name: string; query: st
         <textarea rows={3} value={urls} onChange={(e) => setUrls(e.target.value)} placeholder="https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=…" />
         <label>品牌（選填）</label>
         <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="例如：理膚寶水" />
+        <h3 className="sub-h">爬蟲條件</h3>
+        <p className="hist-sub">每天會用「搜尋關鍵字」到 momo、蝦皮商城、酷澎搜尋；標題同時包含「必須包含」的每個字、又沒有「排除」的字，就自動加入這個產品。條件寫得越準，抓到的越正確。</p>
+        <label>搜尋關鍵字（多組用逗號分隔）</label>
+        <input value={queries} onChange={(e) => setQueries(e.target.value)} placeholder="例如：理膚寶水 B5 修復霜, La Roche-Posay Cicaplast" />
+        <label>標題必須包含（用空白分隔；留空＝不自動加入，只追蹤上面勾選的）</label>
+        <input value={must} onChange={(e) => setMust(e.target.value)} placeholder="例如：理膚寶水 B5 修復霜" />
+        <label>標題排除（用空白分隔）</label>
+        <input value={exclude} onChange={(e) => setExclude(e.target.value)} placeholder="例如：試用 贈品 旅行組" />
         <label>管理密碼</label>
         <input type="password" value={key} onChange={(e) => setKey(e.target.value)} />
         <div style={{ marginTop: 16 }}>
-          <button className="primary" disabled={busy || !key || (!sel.size && !urls.trim())} onClick={submit}>{busy ? '處理中…' : `建立「${name}」並開始追蹤`}</button>
+          <button className="primary" disabled={busy || !key || (!sel.size && !urls.trim() && !must.trim())} onClick={submit}>{busy ? '處理中…' : `建立「${name}」並開始追蹤`}</button>
         </div>
         {msg && <p>{msg}</p>}
       </section>

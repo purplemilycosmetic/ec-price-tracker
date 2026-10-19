@@ -1,7 +1,7 @@
 import { adminDb, todayTaipei } from './db';
 import { scrape } from './scrapers';
 import { classify, CUSTOM, PRODUCTS, productOf } from './classify';
-import { isUserKey, loadUserProducts, loadHidden } from './custom';
+import { isUserKey, loadUserProducts, loadHidden, matchesRule } from './custom';
 import { searchMomo } from './momoSearch';
 import { fetchAllOfficial } from './official';
 import { searchBiggo, type BiggoItem } from './biggo';
@@ -82,8 +82,13 @@ export async function runUpdate(onlyIds?: number[]) {
 export async function discoverMomo() {
   const db = adminDb();
   const rows: any[] = [];
-  const hidden = await loadHidden();
-  const jobs = PRODUCTS.filter((p) => !hidden.has(p.key)).flatMap((p) => p.queries.map((q) => ({ p, q })));
+  const [hidden, users] = await Promise.all([loadHidden(), loadUserProducts()]);
+  const ruled = users.filter((u) => u.must?.length);
+  const jobs: { p: { key: string; user?: (typeof users)[number] }; q: string }[] = [
+    ...PRODUCTS.filter((p) => !hidden.has(p.key)).flatMap((p) => p.queries.map((q) => ({ p, q }))),
+    // 自建產品：用它的搜尋關鍵字找，標題符合條件的新商品頁自動加入
+    ...ruled.flatMap((u) => u.queries.map((q) => ({ p: { key: u.key, user: u }, q }))),
+  ];
   // 同時搜尋（間隔 250ms 錯開），避免拖長整體執行時間
   const results = await Promise.all(jobs.map(({ q }, i) =>
     new Promise((r) => setTimeout(r, i * 250)).then(() => searchMomo(q)).catch(() => ({ items: [] as any[] }))));
@@ -92,8 +97,9 @@ export async function discoverMomo() {
     const p = jobs[i].p;
     for (const it of items) {
       const c = classify(it.title);
-      if (c.line === p.key && !rows.some((r) => r.url === it.url))
-        rows.push({ platform: 'momo', url: it.url, title: it.title, brand: c.brand, line: c.line, spec: c.spec, image_url: it.image });
+      if (rows.some((r) => r.url === it.url)) continue;
+      if (p.user ? matchesRule(it.title, p.user) : c.line === p.key)
+        rows.push({ platform: 'momo', url: it.url, title: it.title, brand: p.user ? (p.user.brand ?? c.brand) : c.brand, line: p.key, spec: c.spec, image_url: it.image });
     }
   }
   if (!rows.length) return 0;
@@ -148,6 +154,8 @@ export async function runBiggo(day: string, opts: { onlyPending?: boolean; budge
   // 網址 → 使用者指定的產品（自訂追蹤或自建產品）；內建產品由標題自動判斷
   const customLine = new Map((customs || []).filter((c) => c.line && !productOf(c.line)).map((c) => [c.url as string, c.line as string]));
   const customUrls = new Set(Array.from(customLine.keys()));
+  const ruled = userProducts.filter((u) => u.must?.length);
+  const ruleOf = (title: string) => ruled.find((u) => matchesRule(title, u)) ?? null;
   let queries = Array.from(new Set([...PRODUCTS.filter((p) => !hidden.has(p.key)).flatMap((p) => p.queries), ...(watch || []).map((w) => w.query), ...userProducts.flatMap((u) => u.queries)]));
   // 每小時補抓：今天已經抓到資料的關鍵字跳過，只重抓失敗的
   const log = await jobLog(day, 'biggo:');
@@ -166,7 +174,8 @@ export async function runBiggo(day: string, opts: { onlyPending?: boolean; budge
     if (status !== 200) searchFailed++;
     for (const it of items) {
       const c = classify(it.title);
-      if ((!c.line || hidden.has(c.line)) && !customUrls.has(it.url)) continue; // 只留追蹤中的產品（停止追蹤的不收）
+      const builtIn = c.line && !hidden.has(c.line);
+      if (!builtIn && !customUrls.has(it.url) && !ruleOf(it.title)) continue; // 只留追蹤中的產品（停止追蹤的不收）
       if (/非賣品|贈品|請勿下單|兌換|0元加購/.test(it.title) || it.price >= 9999) continue; // 贈品、佔位商品
       const prev = found.get(it.url);
       if (!prev || it.price < prev.price) found.set(it.url, it);
@@ -180,7 +189,10 @@ export async function runBiggo(day: string, opts: { onlyPending?: boolean; budge
     const c = classify(i.title);
     const cl = customLine.get(i.url);
     const keep = cl && (isUserKey(cl) || !c.line); // 自建產品一律保留；舊的「自訂」若現在對得上內建產品就歸過去
-    return { platform: i.platform, url: i.url, title: i.title, brand: keep ? undefined : c.brand, line: keep ? cl : c.line, spec: c.spec, image_url: i.image ?? null };
+    if (keep) return { platform: i.platform, url: i.url, title: i.title, line: cl, spec: c.spec, image_url: i.image ?? null };
+    // 新找到的商品：內建產品優先；內建產品對不上（或已停止追蹤）時，符合自建產品條件就歸到自建產品
+    const u = c.line && !hidden.has(c.line) ? null : ruleOf(i.title);
+    return { platform: i.platform, url: i.url, title: i.title, brand: u ? (u.brand ?? c.brand) : c.brand, line: u ? u.key : c.line, spec: c.spec, image_url: i.image ?? null };
   });
   const { data: saved, error } = await db.from('ec_listings').upsert(rows, { onConflict: 'url' }).select('id,url,active');
   if (error) throw error;

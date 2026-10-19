@@ -1,6 +1,7 @@
 import { searchBiggo } from '@/lib/biggo';
 import { searchMomo } from '@/lib/momoSearch';
-import { classify, productOf } from '@/lib/classify';
+import { classify, productOf, PRODUCTS, productLabel } from '@/lib/classify';
+import { loadUserProducts, loadHidden } from '@/lib/custom';
 import AddButton from './AddButton';
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,11 @@ const NAMES: Record<string, string> = { momo: 'momo', shopee: '蝦皮商城', co
 export default async function Search({ searchParams }: { searchParams: { q?: string; sort?: string } }) {
   const q = (searchParams.q || '').trim().slice(0, 60);
   const sort = searchParams.sort === 'price' ? 'price' : 'relevance';
+  const [users, hidden] = await Promise.all([loadUserProducts(), loadHidden()]);
+  const choices = [
+    ...PRODUCTS.filter((p) => !hidden.has(p.key)).map((p) => ({ key: p.key, name: productLabel(p) })),
+    ...users.map((u) => ({ key: u.key, name: u.name })),
+  ];
   let hits: Hit[] = [];
   let failed: string[] = [];
   let crash = '';
@@ -85,7 +91,7 @@ export default async function Search({ searchParams }: { searchParams: { q?: str
                 <div className="result-side">
                   <span className={`num price-lg ${h.price === lowest ? 'is-low' : ''}`}>${h.price.toLocaleString()}</span>
                   {['momo', 'shopee', 'coupang'].includes(p) && !h.tracked && (
-                    <AddButton url={h.url} title={h.title} price={h.price} image={h.image} query={q} />
+                    <AddButton url={h.url} title={h.title} price={h.price} image={h.image} query={q} products={choices} />
                   )}
                 </div>
               </li>

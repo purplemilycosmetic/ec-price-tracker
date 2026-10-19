@@ -1,11 +1,12 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 
-export type Series = { key: string; name: string; pts: (number | null)[] };
+export type Series = { key: string; name: string; pts: (number | null)[]; color?: string };
+const col = (s: Series) => s.color ?? `var(--${s.key})`;
 const fmt = (n: number) => `$${n.toLocaleString()}`;
 
 // 每日最低價趨勢：一條線一個平台，滑過顯示當天各平台價格
-export default function TrendChart({ days, series }: { days: string[]; series: Series[] }) {
+export default function TrendChart({ days, series, endLabels = true }: { days: string[]; series: Series[]; endLabels?: boolean }) {
   const [hover, setHover] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -21,7 +22,7 @@ export default function TrendChart({ days, series }: { days: string[]; series: S
   const all = live.flatMap((s) => s.pts).filter((v): v is number => v != null);
   if (!all.length) return <div className="muted chart-empty">這個規格還沒有價格資料</div>;
 
-  const W = Math.max(300, width), H = W < 500 ? 220 : 260, L = 52, R = W < 500 ? 66 : 76, T = 16, B = 32;
+  const W = Math.max(300, width), H = W < 500 ? 220 : 260, L = 52, R = !endLabels ? 16 : W < 500 ? 66 : 76, T = 16, B = 32;
   // 整齊的刻度：間距取 1/2/5 × 10^n
   const rawLo = Math.min(...all), rawHi = Math.max(...all);
   const span = Math.max(rawHi - rawLo, rawHi * 0.2, 20);
@@ -69,14 +70,14 @@ export default function TrendChart({ days, series }: { days: string[]; series: S
           s.pts.forEach((v, i) => { if (v != null) d += `${d && s.pts[i - 1] != null ? 'L' : 'M'}${x(i)},${y(v)}`; });
           return (
             <g key={s.key}>
-              <path d={d} fill="none" stroke={`var(--${s.key})`} strokeWidth={2} strokeLinejoin="round" />
+              <path d={d} fill="none" stroke={col(s)} strokeWidth={2} strokeLinejoin="round" />
               {s.pts.map((v, i) => v != null && (
-                <circle key={i} cx={x(i)} cy={y(v)} r={hover === i ? 5 : 4} fill={`var(--${s.key})`} stroke="var(--surface)" strokeWidth={2} />
+                <circle key={i} cx={x(i)} cy={y(v)} r={hover === i ? 5 : 4} fill={col(s)} stroke="var(--surface)" strokeWidth={2} />
               ))}
             </g>
           );
         })}
-        {ends.map(({ s, y: ly }) => (
+        {endLabels && ends.map(({ s, y: ly }) => (
           <text key={s.key} x={W - R + 8} y={ly + 4} className="endlabel">{s.name}</text>
         ))}
       </svg>
@@ -84,7 +85,7 @@ export default function TrendChart({ days, series }: { days: string[]; series: S
         <div className="tooltip" style={{ left: `${(x(hover) / W) * 100}%` }}>
           <b>{days[hover]}</b>
           {live.map((s) => (
-            <div key={s.key}><span className="dot" style={{ background: `var(--${s.key})` }} />{s.name}
+            <div key={s.key}><span className="dot" style={{ background: col(s) }} />{s.name}
               <span className="tv">{s.pts[hover] != null ? fmt(s.pts[hover]!) : '—'}</span></div>
           ))}
         </div>
@@ -92,7 +93,7 @@ export default function TrendChart({ days, series }: { days: string[]; series: S
       <div className="legend">
         {series.map((s) => (
           <span key={s.key} className={s.pts.some((v) => v != null) ? '' : 'off'}>
-            <span className="dot" style={{ background: `var(--${s.key})` }} />{s.name}
+            <span className="dot" style={{ background: col(s) }} />{s.name}
           </span>
         ))}
       </div>

@@ -4,6 +4,7 @@ import { PRODUCTS, CUSTOM } from '@/lib/classify';
 import TrendChart from './TrendChart';
 import { SITEWIDE } from '@/lib/promo';
 import { isUserKey, type UserProduct } from '@/lib/custom';
+import EditProduct from './EditProduct';
 
 export type Listing = {
   id: number; brand: string | null; line: string | null; spec: string | null; platform: string;
@@ -56,6 +57,15 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
   useEffect(() => { try { const k = localStorage.getItem('ec-tab'); if (k && tabs.some((t) => t.key === k)) setTabKey(k); } catch {} }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { try { localStorage.setItem('ec-tab', tabKey); } catch {} }, [tabKey]);
   const [open, setOpen] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  async function dropListing(id: number) {
+    if (!window.confirm('從這個產品移除這個商品頁？之後不再追蹤它的價格。')) return;
+    let key = ''; try { key = localStorage.getItem('ec-admin-key') || ''; } catch {}
+    if (!key) key = window.prompt('輸入管理密碼') || '';
+    if (!key) return;
+    const r = await fetch('/api/listings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, action: 'deactivate', id }) });
+    if (r.ok) { try { localStorage.setItem('ec-admin-key', key); } catch {} window.location.reload(); } else window.alert('操作失敗，請確認管理密碼');
+  }
   async function renameProduct(product: string, cur: string) {
     const name = window.prompt('新的產品名稱', cur);
     if (!name || name.trim() === cur) return;
@@ -173,7 +183,7 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
       <nav className="switcher" aria-label="追蹤產品">
         {tabs.filter((t) => t.key !== '__none').map((t) => (
           <button key={t.key} className={`tile ${t.key === tab.key ? 'on' : ''}`} aria-pressed={t.key === tab.key}
-            onClick={() => { setTabKey(t.key); setOpen(null); setTrendSpec(null); }}>
+            onClick={() => { setTabKey(t.key); setOpen(null); setTrendSpec(null); setEditing(false); }}>
             <Img src={tileImage(t.key)} alt="" className="tile-img" />
             <span className="tile-brand">{t.brand}</span>
             <span className="tile-name">{t.short}</span>
@@ -198,9 +208,16 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
             {official?.official_url && <span className="note">官網不直接販售，無官網售價</span>}
           </div>
           <div className="hero-links">
-            {isUserKey(tab.key) && <button className="btn-quiet" onClick={() => renameProduct(tab.key, tab.name)}>修改名稱</button>}
+            {isUserKey(tab.key) && <button className="btn-quiet" onClick={() => setEditing(!editing)}>編輯名稱與爬蟲條件</button>}
             {tab.key !== '__none' && <button className="btn-quiet" onClick={() => removeProduct(tab.key, tab.name)}>刪除（停止追蹤）</button>}
           </div>
+          {editing && isUserKey(tab.key) && userProducts.find((u) => u.key === tab.key) && (
+            <EditProduct p={userProducts.find((u) => u.key === tab.key)!} onClose={() => setEditing(false)} />
+          )}
+          {isUserKey(tab.key) && !editing && (() => {
+            const u = userProducts.find((x) => x.key === tab.key);
+            return u ? <div className="hist-sub">搜尋：{u.queries.join('、') || u.name}；{u.must?.length ? `標題需包含「${u.must.join(' ')}」${u.exclude?.length ? `、排除「${u.exclude.join(' ')}」` : ''}的新商品頁會自動加入` : '未設定自動加入條件，只追蹤手動加入的商品頁'}</div> : null;
+          })()}
           <div className="hero-stats">
             追蹤 {tabListings.length} 個商品頁、{rows.length} 種規格，資料日期 {lastDay ?? '—'}{lastDay && lastDay !== today ? '（今日 09:00 更新尚未完成）' : ''}
           </div>
@@ -289,6 +306,7 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
                                   <span className="page-plat"><span className="swatch" style={{ background: `var(--${l.platform})` }} />{pname(l.platform)}</span>
                                   <a href={l.url} target="_blank" rel="noreferrer" className="page-title">{l.title || l.url}</a>
                                   <span className="num page-price">{s ? fmt(s.final_price) : STATUS[latest(l)?.status ?? ''] ?? '—'}</span>
+                                  <button className="btn-quiet page-drop" onClick={(e) => { e.stopPropagation(); dropListing(l.id); }} aria-label="移除這個商品頁">移除</button>
                                 </li>
                               );
                             })}

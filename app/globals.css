@@ -109,7 +109,7 @@ button { font: inherit; color: inherit; }
 .empty-cell { color: var(--muted); padding: 28px 16px !important; }
 .detail > td { background: var(--bg); padding: 4px 16px 12px; }
 .pages { list-style: none; margin: 0; padding: 0; }
-.pages li { display: grid; grid-template-columns: 40px 96px 1fr auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.pages li { display: grid; grid-template-columns: 40px 96px 1fr auto auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
 .pages li:last-child { border-bottom: 0; }
 .page-plat { white-space: nowrap; color: var(--ink-2); }
 .page-title { color: var(--ink); }
@@ -273,3 +273,26 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px
 .restore { list-style: none; margin: 0; padding: 0; }
 .restore li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
 .restore li:last-child { border-bottom: 0; }
+.sub-h { font-size: 15px; margin: 20px 0 4px; }
+.edit-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin: 12px 0; padding: 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--tint); }
+.edit-panel label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); margin: 0; }
+.edit-panel input { padding: 8px 10px; }
+.edit-panel .hist-sub, .edit-panel .edit-actions { grid-column: 1 / -1; }
+.edit-actions { display: flex; gap: 14px; align-items: center; }
+@media (max-width: 640px) { .edit-panel { grid-template-columns: 1fr; } }
+
+.page-drop { font-size: 12px; }
+@media (max-width: 640px) { .pages li { grid-template-columns: 40px 14px 1fr auto auto !important; } }
+.pick-to { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+.pick-to select { width: auto; max-width: 220px; padding: 4px 6px; font-size: 13px; }
+
+/* 價格比較 */
+.cmp-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.cmp-row select { width: auto; max-width: 260px; padding: 7px 8px; }
+.cmp-dot { width: 12px; height: 12px; border-radius: 6px; flex: none; }
+.cmp-unit { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; margin: 0; }
+.cmp-unit input { width: auto; }
+.cmp-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 14px 0 10px; }
+.cmp-actions label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); margin: 0; }
+.cmp-actions input { width: auto; padding: 7px 8px; }
+@media (max-width: 640px) { .cmp-row select { flex: 1 1 45%; max-width: none; } }
