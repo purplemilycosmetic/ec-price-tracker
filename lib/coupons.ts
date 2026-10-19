@@ -32,12 +32,12 @@ export function parseMomo(html: string, today: string): Raw[] {
     const tag = li.match(/js-PD_txt3"[^>]*>([^<]*)</)?.[1]?.trim() ?? '';
     const [s, e] = v(4).split('~').map((x) => x.trim());
     if (!val || val === '-' || !e || e < today) continue; // 沒有面額、已過期
-    const c = base('momo', 'momo-official', `${cat} ${money}${val}${unit}${limit ? `（${limit}）` : ''}${tag ? ` ${tag}` : ''}`);
+    const c = base('momo', 'momo-official', `${cat || limit || '指定商品'} ${money}${val}${unit}${limit && cat ? `（${limit}）` : ''}${tag ? ` ${tag}` : ''}`.trim());
     if (/折/.test(unit)) c.rate = rateOf(val); else c.amount = num(val);
     c.min_spend = num(tag.match(/滿\s*([\d,]+)/)?.[1]) || 0;
     c.start_date = /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
     c.end_date = e;
-    c.scope = /指定/.test(cat + limit) ? 'designated' : /美妝|保養/.test(cat) ? 'beauty' : /全站/.test(cat) ? 'all' : 'category';
+    c.scope = !cat || /指定/.test(cat + limit) ? 'designated' : /美妝|保養/.test(cat) ? 'beauty' : /全站/.test(cat) ? 'all' : 'category';
     c.scope_text = c.scope === 'category' ? cat : limit || null;
     c.url = 'https://www.momoshop.com.tw/edm/cmmedm.jsp?lpn=O5k04sY5dth';
     out.push(c);
@@ -55,6 +55,7 @@ export function parseCalling(md: string, platform: 'shopee' | 'coupang', pageUrl
     const tag = br?.[1] ?? '';
     const body = block.slice(0, 1200);
     if (/免運/.test(head) && !/折\s*\$/.test(head)) continue;
+    if (/低至|最低|\d\s*折起|特賣|限時特價/.test(head)) continue; // 商品特價活動，不是券
     // 優惠期限
     const dm = body.match(/優惠期限[：:]\s*(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
     let end = dm ? `${dm[1]}-${pad(+dm[2])}-${pad(+dm[3])}` : null;
