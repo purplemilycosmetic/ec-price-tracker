@@ -35,7 +35,8 @@ export default async function NewProduct({ searchParams }: { searchParams: { nam
       ...m.items.map((i: any) => ({ platform: 'momo', title: i.title, url: i.url, price: i.price, image: i.image ?? null })),
       ...b.items.filter((i: any) => i.platform === 'shopee' || i.platform === 'coupang')
         .map((i: any) => ({ platform: i.platform, title: i.title, url: i.url, price: i.price, image: i.image ?? null })),
-    ].map((h) => ({ ...h, spec: classify(h.title).spec, match: match(h.title) }));
+    ].filter((h, i, arr) => arr.findIndex((x) => x.url === h.url) === i) // 同一個商品頁只列一次
+      .map((h) => ({ ...h, spec: classify(h.title).spec, match: match(h.title) }));
   }
   return (
     <main className="page">
