@@ -21,7 +21,8 @@ export default async function Compare({ searchParams }: { searchParams: Record<s
   let to = isDay(one(searchParams.to)) ? one(searchParams.to)! : today;
   let from = isDay(one(searchParams.from)) ? one(searchParams.from)! : addDays(to, -29);
   if (from > to) [from, to] = [to, from];
-  const raw = searchParams.s ? ([] as string[]).concat(searchParams.s as any) : [];
+  // 多條線用「!」串在同一個參數裡（也相容重複的 s 參數）
+  const raw = (searchParams.s ? ([] as string[]).concat(searchParams.s as any) : []).flatMap((x) => x.split('!'));
   const lines = raw.map(decode).filter((l): l is NonNullable<typeof l> => !!l).slice(0, 6);
 
   // 選單：所有有資料的產品（含已停止追蹤的）與各自的規格

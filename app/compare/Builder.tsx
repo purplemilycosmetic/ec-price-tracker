@@ -13,7 +13,7 @@ export default function Builder({ products, specs, initial, from, to, today }: {
   const set = (i: number, patch: Partial<Line>) => setRows((r) => r.map((x, k) => (k === i ? { ...x, ...patch } : x)));
   const go = (range?: [string, string]) => {
     const q = new URLSearchParams();
-    rows.filter((r) => r.product).forEach((r) => q.append('s', encode(r)));
+    q.set('s', rows.filter((r) => r.product).map(encode).join('!'));
     q.set('from', range?.[0] ?? f); q.set('to', range?.[1] ?? t);
     window.location.href = '/compare?' + q.toString();
   };
