@@ -6,7 +6,7 @@ import { encode, CMP_PLATFORMS, CMP_COLORS, type Line } from '@/lib/compareShare
 export default function Builder({ products, specs, initial, from, to, today }: {
   products: { key: string; name: string }[]; specs: Record<string, string[]>; initial: Line[]; from: string; to: string; today: string;
 }) {
-  const blank = (): Line => ({ product: products[0]?.key ?? '', spec: '', platform: 'all', stat: 'avg', unit: false });
+  const blank = (): Line => ({ product: products[0]?.key ?? '', spec: '', platform: 'all', stat: 'avg', unit: false, coupon: false });
   const [rows, setRows] = useState<Line[]>(initial.length ? initial : [blank(), { ...blank(), product: products[1]?.key ?? products[0]?.key ?? '' }]);
   const [f, setF] = useState(from);
   const [t, setT] = useState(to);
@@ -38,6 +38,7 @@ export default function Builder({ products, specs, initial, from, to, today }: {
             <option value="avg">平均價</option><option value="min">最低價</option>
           </select>
           <label className="cmp-unit"><input type="checkbox" checked={r.unit} onChange={(e) => set(i, { unit: e.target.checked })} />換算每入</label>
+          <label className="cmp-unit"><input type="checkbox" checked={r.coupon} onChange={(e) => set(i, { coupon: e.target.checked })} />帶入券後價</label>
           {rows.length > 1 && <button className="btn-quiet" onClick={() => setRows(rows.filter((_, k) => k !== i))} aria-label="刪除這條線">刪除</button>}
         </div>
       ))}

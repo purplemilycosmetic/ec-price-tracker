@@ -48,7 +48,7 @@ export default async function Compare({ searchParams }: { searchParams: Record<s
   const { days, series, counts } = await loadLines(lines, from, to);
   const label = (i: number) => {
     const l = lines[i];
-    return `${nameOf(l.product)}｜${l.spec || '全部規格'}｜${CMP_PLATFORMS.find((p) => p.key === l.platform)?.name}｜${l.stat === 'min' ? '最低' : '平均'}${l.unit ? '（每入）' : ''}`;
+    return `${nameOf(l.product)}｜${l.spec || '全部規格'}｜${CMP_PLATFORMS.find((p) => p.key === l.platform)?.name}｜${l.stat === 'min' ? '最低' : '平均'}${l.coupon ? '・券後' : ''}${l.unit ? '（每入）' : ''}`;
   };
   const chart = lines.map((_, i) => ({ key: `c${i}`, name: label(i), pts: series[i], color: CMP_COLORS[i] }));
 
@@ -56,7 +56,7 @@ export default async function Compare({ searchParams }: { searchParams: Record<s
     <main className="page">
       <section className="search-head">
         <h1 className="display">價格比較</h1>
-        <p className="lede">把不同產品、規格、平台的每日價格放在同一張圖比較。例如「雅漾活泉水 300ml×3 的平均價」對「AHC B5 精華 30ml 的平均價」，或勾選「換算每入」比較多入組平均每一入的價格。</p>
+        <p className="lede">把不同產品、規格、平台的每日價格放在同一張圖比較。例如「雅漾活泉水 300ml×3 的平均價」對「AHC B5 精華 30ml 的平均價」，或勾選「換算每入」比較多入組平均每一入的價格；勾選「帶入券後價」會用當天有效的優惠券計算。</p>
       </section>
 
       <Builder products={products} specs={specs} initial={lines} from={from} to={to} today={today} />

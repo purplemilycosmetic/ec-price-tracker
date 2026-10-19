@@ -28,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="nav">
               <a href="/">追蹤產品</a>
               <a href="/compare">價格比較</a>
+              <a href="/coupons">優惠券</a>
               <a href="/forum">論壇評論</a>
               <a href="/history">歷史查詢</a>
             </nav>

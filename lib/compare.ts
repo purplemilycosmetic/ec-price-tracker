@@ -1,13 +1,18 @@
 // 比較：從資料庫讀出每條線的每日價格
 import { adminDb, fetchAll } from './db';
 import { unitsOf, type Line } from './compareShared';
+import { applyCoupons, type Coupon } from './couponCalc';
 export * from './compareShared';
 
 export async function loadLines(lines: Line[], from: string, to: string) {
   const db = adminDb();
   const products = Array.from(new Set(lines.map((l) => l.product)));
   if (!products.length) return { days: [] as string[], series: [] as (number | null)[][], counts: [] as number[] };
-  const { data: ls } = await db.from('ec_listings').select('id,line,spec,platform').in('line', products);
+  const [{ data: ls }, { data: cps }] = await Promise.all([
+    db.from('ec_listings').select('id,line,spec,platform,title,brand').in('line', products),
+    lines.some((l) => l.coupon) ? db.from('ec_coupons').select('*').eq('active', true).or(`end_date.gte.${from},end_date.is.null`) : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const coupons = (cps || []) as Coupon[];
   const listings = ls || [];
   const ids = listings.map((l) => l.id);
   const snaps = ids.length ? await fetchAll((a, b) => db.from('ec_price_snapshots').select('listing_id,captured_on,final_price')
@@ -23,7 +28,9 @@ export async function loadLines(lines: Line[], from: string, to: string) {
     const perDay = new Map<string, number[]>();
     for (const s of snaps) {
       if (!pick.has(s.listing_id)) continue;
-      const v = ln.unit ? s.final_price / unitsOf(byId.get(s.listing_id)!.spec) : s.final_price;
+      const l = byId.get(s.listing_id)!;
+      const p = ln.coupon ? applyCoupons(s.final_price, l, s.captured_on, coupons).price : s.final_price; // 帶入當天有效的券
+      const v = ln.unit ? p / unitsOf(l.spec) : p;
       if (!perDay.has(s.captured_on)) perDay.set(s.captured_on, []);
       perDay.get(s.captured_on)!.push(v);
     }

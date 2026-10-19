@@ -298,3 +298,9 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px
 @media (max-width: 640px) { .cmp-row select { flex: 1 1 45%; max-width: none; } }
 button:disabled { opacity: .5; cursor: not-allowed; }
 .form-msg { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: var(--tint); font-size: 14px; }
+.coupon-toggle { margin-top: 10px; align-items: center; }
+.coupon-toggle .btn-quiet { margin-left: 12px; font-size: 13px; }
+.coupon-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 11px; line-height: 16px; background: #fff2d6; color: #8a5a00; border: 1px solid #f0d08a; cursor: help; vertical-align: middle; }
+.coupon-form { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 900px) { .coupon-form { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .coupon-form { grid-template-columns: 1fr; } }

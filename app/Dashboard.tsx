@@ -5,6 +5,7 @@ import TrendChart from './TrendChart';
 import { SITEWIDE } from '@/lib/promo';
 import { isUserKey, type UserProduct } from '@/lib/custom';
 import EditProduct from './EditProduct';
+import { applyCoupons, describe, type Coupon } from '@/lib/couponCalc';
 
 export type Listing = {
   id: number; brand: string | null; line: string | null; spec: string | null; platform: string;
@@ -13,6 +14,7 @@ export type Listing = {
 export type Snap = {
   listing_id: number; captured_on: string; status: string; list_price: number | null; sale_price: number | null;
   final_price: number | null; promos: { text: string; period?: string }[]; in_stock: boolean | null; error: string | null;
+  base_price?: number; used?: Coupon[]; // 帶入券後價時：原本的折後價與用到的券
 };
 export type PlatformEvent = {
   id: number; platform: string; kind: string; title: string | null; url: string; image_url: string | null;
@@ -44,8 +46,8 @@ function Img({ src, alt, className }: { src: string | null | undefined; alt: str
   return <img className={className} src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" />;
 }
 
-export default function Dashboard({ listings, snaps, events, officials, today, userProducts, hidden }: {
-  listings: Listing[]; snaps: Snap[]; events: PlatformEvent[]; officials: OfficialProduct[]; today: string; userProducts: UserProduct[]; hidden: string[];
+export default function Dashboard({ listings, snaps: rawSnaps, events, officials, today, userProducts, hidden, coupons }: {
+  listings: Listing[]; snaps: Snap[]; events: PlatformEvent[]; officials: OfficialProduct[]; today: string; userProducts: UserProduct[]; hidden: string[]; coupons: Coupon[];
 }) {
   const hasCustom = listings.some((l) => l.line === CUSTOM) && !hidden.includes(CUSTOM);
   const tabs = [...PRODUCTS.filter((p) => !hidden.includes(p.key)).map((p) => ({ key: p.key, brand: p.brand.split(' ')[0], full: p.brand, name: p.name, short: p.short })),
@@ -87,6 +89,18 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
   const tab = tabs.find((t) => t.key === tabKey) ?? tabs[0];
   const official = officials.find((o) => o.key === tab.key);
 
+  // 帶入券後價：每天的價格換成套用當天有效券之後的金額（趨勢圖、比價表、價格階梯一起換）
+  const [withCoupon, setWithCoupon] = useState(false);
+  useEffect(() => { try { setWithCoupon(localStorage.getItem('ec-coupon') === '1'); } catch {} }, []);
+  const toggleCoupon = (v: boolean) => { setWithCoupon(v); try { localStorage.setItem('ec-coupon', v ? '1' : '0'); } catch {} };
+  const listingById = useMemo(() => new Map(listings.map((l) => [l.id, l])), [listings]);
+  const snaps = useMemo(() => (!withCoupon ? rawSnaps : rawSnaps.map((s) => {
+    const l = listingById.get(s.listing_id);
+    if (!l || s.status !== 'ok' || s.final_price == null) return s;
+    const a = applyCoupons(s.final_price, l, s.captured_on, coupons);
+    return a.used.length ? { ...s, final_price: a.price, base_price: s.final_price, used: a.used } : s;
+  })), [withCoupon, rawSnaps, listingById, coupons]);
+  const couponNote = (s: Snap) => s.used?.length ? `原 ${fmt(s.base_price)}，用券：\n${s.used.map((c) => `・${c.title}（${describe(c)}）`).join('\n')}` : '';
   const byListing = useMemo(() => {
     const m = new Map<number, Snap[]>();
     for (const s of snaps) { if (!m.has(s.listing_id)) m.set(s.listing_id, []); m.get(s.listing_id)!.push(s); }
@@ -224,7 +238,7 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
         </div>
         {ladder.length > 0 && tab.key !== CUSTOM && (
           <div className="ladder" aria-label={`${heroSpec} 今日各平台最低價`}>
-            <div className="ladder-title">{heroSpec}　今日最低價</div>
+            <div className="ladder-title">{heroSpec}　今日最低{withCoupon ? '券後價' : '價'}</div>
             {ladder.map(({ p, b }, i) => (
               <a key={p.key} className="rung" href={b!.l.url} target="_blank" rel="noreferrer">
                 <span className="rung-name"><span className="swatch" style={{ background: `var(--${p.key})` }} />{p.name}</span>
@@ -244,7 +258,12 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
       <section className="block">
         <div className="block-head">
           <h2>各規格價格</h2>
-          <p>每格是該平台這個規格今天的最低折後價，不含折價券與刷卡回饋。點一列可看所有商品頁。</p>
+          <p>{withCoupon ? '每格是帶入目前可用優惠券後的最低價（標「券後」的格子滑過可看用了哪些券）。' : '每格是該平台這個規格今天的最低折後價，不含折價券與刷卡回饋。'}點一列可看所有商品頁。</p>
+          <div className="seg coupon-toggle" role="group" aria-label="價格計算方式">
+            <button className={!withCoupon ? 'on' : ''} onClick={() => toggleCoupon(false)}>一般價格</button>
+            <button className={withCoupon ? 'on' : ''} onClick={() => toggleCoupon(true)}>帶入券後價</button>
+            <a className="btn-quiet" href="/coupons">看所有券／新增賣場券</a>
+          </div>
         </div>
         <div className="table-wrap">
           <table className="grid-table">
@@ -287,6 +306,7 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
                             <a className={`num price ${isLow ? 'is-low' : ''}`} href={b.l.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
                               {fmt(b.s.final_price)}
                             </a>
+                            {b.s.used?.length ? <span className="coupon-tag" title={couponNote(b.s)}>券後</span> : null}
                             {isLow && <span className="lowest">最低</span>}
                             {d !== 0 && <span className={`num delta ${d < 0 ? 'down' : 'up'}`}>{d < 0 ? '↓' : '↑'}{Math.abs(d)}</span>}
                             {b.s.list_price != null && b.s.list_price > b.s.final_price! && <span className="num was">原價 {fmt(b.s.list_price)}</span>}
@@ -305,7 +325,7 @@ export default function Dashboard({ listings, snaps, events, officials, today, u
                                   <Img src={l.image_url} alt="" className="thumb" />
                                   <span className="page-plat"><span className="swatch" style={{ background: `var(--${l.platform})` }} />{pname(l.platform)}</span>
                                   <a href={l.url} target="_blank" rel="noreferrer" className="page-title">{l.title || l.url}</a>
-                                  <span className="num page-price">{s ? fmt(s.final_price) : STATUS[latest(l)?.status ?? ''] ?? '—'}</span>
+                                  <span className="num page-price" title={s ? couponNote(s) : ''}>{s ? fmt(s.final_price) : STATUS[latest(l)?.status ?? ''] ?? '—'}{s?.used?.length ? <span className="coupon-tag">券後</span> : null}</span>
                                   <button className="btn-quiet page-drop" onClick={(e) => { e.stopPropagation(); dropListing(l.id); }} aria-label="移除這個商品頁">移除</button>
                                 </li>
                               );
