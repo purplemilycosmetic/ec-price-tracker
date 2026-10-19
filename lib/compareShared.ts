@@ -14,6 +14,6 @@ export function decode(s: string): Line | null {
   return { product, spec, platform: CMP_PLATFORMS.some((p) => p.key === platform) ? platform : 'all', stat: stat === 'min' ? 'min' : 'avg', unit: unit === '1' };
 }
 
-// 規格裡的入數：「300ml×3」→ 3；組合或沒寫 → 1
-export const unitsOf = (spec: string | null) => +(spec?.match(/^[^+]*×(\d+)$/)?.[1] || 1);
+// 規格裡的入數：「300ml ×3」→ 3、「10入組」→ 10；組合包或沒寫 → 1
+export const unitsOf = (spec: string | null) => (spec?.startsWith('組合') ? 1 : +(spec?.match(/×\s*(\d+)\s*$/)?.[1] || spec?.match(/(\d+)\s*入/)?.[1] || 1));
 
