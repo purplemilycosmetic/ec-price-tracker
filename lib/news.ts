@@ -1,8 +1,9 @@
 // 平台大型活動：從 Google 新聞 RSS 找近期的購物節、優惠新聞
 export const NEWS_QUERIES: Record<string, string[]> = {
-  momo: ['momo購物網 優惠活動', 'momo 購物節'],
-  shopee: ['蝦皮 優惠活動', '蝦皮 購物節'],
-  coupang: ['酷澎 優惠活動', '酷澎 Coupang 優惠'],
+  // 多抓即將到來的大檔期（雙11、雙12、週年慶），舊活動在顯示時會依日期濾掉
+  momo: ['momo購物網 優惠活動', 'momo 購物節', 'momo 雙11', 'momo 週年慶'],
+  shopee: ['蝦皮 優惠活動', '蝦皮 購物節', '蝦皮 雙11', '蝦皮 商城日'],
+  coupang: ['酷澎 優惠活動', '酷澎 Coupang 優惠', '酷澎 雙11'],
 };
 
 const NAME: Record<string, RegExp> = { momo: /momo|富邦媒/i, shopee: /蝦皮|shopee/i, coupang: /酷澎|coupang/i };
