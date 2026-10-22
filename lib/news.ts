@@ -71,6 +71,13 @@ export function eventDates(title: string, publishedAt: string): string[] {
   if (/雙十二|雙12|1212/.test(t)) md.push([12, 12]);
   if (/雙十(?![一二])|雙10(?!\d)|國慶/.test(t)) md.push([10, 10]);
   if (/光棍節/.test(t)) md.push([11, 11]);
+  const DAYS: [RegExp, number, number][] = [[/世界糧食日/, 10, 16], [/萬聖/, 10, 31], [/聖誕/, 12, 25], [/跨年/, 12, 31], [/情人節(?!.*七夕)/, 2, 14], [/婦女節/, 3, 8], [/兒童節/, 4, 4], [/父親節/, 8, 8]];
+  for (const [re, m, d] of DAYS) if (re.test(t)) md.push([m, d]);
+  // 「搶攻雙11前哨戰」「雙11暖身」：雙11 是目標不是這檔活動本身，有其他日期時以其他日期為準
+  if (/前哨|暖身|預熱/.test(t) && md.length > 1) {
+    const target = md.filter(([m, d]) => m === d && m >= 11).pop();
+    if (target) md.splice(md.indexOf(target), 1);
+  }
   // 年初的活動在年底發的新聞裡多半是指明年
   return md.map(([m, d]) => `${m <= 3 && pm >= 11 ? y + 1 : y}-${pad2(m)}-${pad2(d)}`);
 }
