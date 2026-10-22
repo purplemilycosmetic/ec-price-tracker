@@ -18,7 +18,7 @@ export type Snap = {
 };
 export type PlatformEvent = {
   id: number; platform: string; kind: string; title: string | null; url: string; image_url: string | null;
-  source: string | null; published_at: string | null; last_seen: string;
+  source: string | null; published_at: string | null; last_seen: string; event_on?: string | null;
 };
 export type OfficialProduct = {
   key: string; official_name: string | null; official_url: string | null; image_url: string | null;
@@ -186,7 +186,7 @@ export default function Dashboard({ listings, snaps: rawSnaps, events, officials
     return out;
   }, [listings, byListing, lastDay]); // eslint-disable-line react-hooks/exhaustive-deps
   const banks = events.filter((e) => e.kind === 'bank');
-  const news = events.filter((e) => e.kind === 'news').sort((a, b) => (b.published_at || '').localeCompare(a.published_at || ''));
+  const news = events.filter((e) => e.kind === 'news'); // 已依活動日期排序（還沒到的活動在前）
   const tileImage = (key: string) => officials.find((o) => o.key === key)?.image_url
     || listings.find((l) => l.line === key && l.platform === 'momo' && l.image_url)?.image_url
     || listings.find((l) => l.line === key && l.image_url)?.image_url;
@@ -424,7 +424,7 @@ export default function Dashboard({ listings, snaps: rawSnaps, events, officials
                     <ul className="news">{nw.map((n) => (
                       <li key={n.id}>
                         <a href={n.url} target="_blank" rel="noreferrer">{n.title}</a>
-                        <span className="src">{n.source}，{n.published_at?.slice(5, 10).replace('-', '/')}</span>
+                        <span className="src">{n.event_on && <b className="event-on">活動 {n.event_on.slice(5).replace('-', '/')}</b>}{n.source}，{n.published_at?.slice(5, 10).replace('-', '/')}</span>
                       </li>
                     ))}</ul>
                   ) : <p className="none">近三週沒有相關消息</p>}

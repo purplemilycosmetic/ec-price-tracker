@@ -54,3 +54,30 @@ export function cleanNews<T extends { platform: string; title: string | null }>(
   }
   return out;
 }
+
+// 從標題找出活動日期（4.4、9.9、10/25、11月11日、雙11、雙十、雙12；區間取最後一天）
+const pad2 = (n: number) => String(n).padStart(2, '0');
+export function eventDates(title: string, publishedAt: string): string[] {
+  const t = title.normalize('NFKC');
+  const pub = new Date(new Date(publishedAt).getTime() + 8 * 3600_000);
+  const y = pub.getUTCFullYear(), pm = pub.getUTCMonth() + 1;
+  const md: [number, number][] = [];
+  const ok = (m: number, d: number) => m >= 1 && m <= 12 && d >= 1 && d <= 31;
+  for (const m of Array.from(t.matchAll(/(?<![\d.$])(\d{1,2})\.(\d{1,2})(?![\d.]|\s*(?:折|%|倍|萬|億|元|吋|G|分))/g))) if (ok(+m[1], +m[2])) md.push([+m[1], +m[2]]);
+  for (const m of Array.from(t.matchAll(/(?<![\d\/])(\d{1,2})\/(\d{1,2})(?![\d\/])/g))) if (ok(+m[1], +m[2])) md.push([+m[1], +m[2]]);
+  for (const m of Array.from(t.matchAll(/(\d{1,2})月(\d{1,2})[日號]/g))) if (ok(+m[1], +m[2])) md.push([+m[1], +m[2]]);
+  if (/雙十一|雙11|1111/.test(t)) md.push([11, 11]);
+  if (/雙十二|雙12|1212/.test(t)) md.push([12, 12]);
+  if (/雙十(?![一二])|雙10(?!\d)/.test(t)) md.push([10, 10]);
+  // 年初的活動在年底發的新聞裡多半是指明年
+  return md.map(([m, d]) => `${m <= 3 && pm >= 11 ? y + 1 : y}-${pad2(m)}-${pad2(d)}`);
+}
+
+// 活動日期都已經過了 → 舊活動；沒寫日期的一般優惠新聞不算
+export function eventStatus(title: string, publishedAt: string, today: string): { past: boolean; on: string | null } {
+  const ds = eventDates(title, publishedAt);
+  if (!ds.length) return { past: false, on: null };
+  const sorted = ds.sort();
+  const last = sorted[sorted.length - 1];
+  return { past: last < today, on: sorted.find((d) => d >= today) ?? null }; // 標示最近一個還沒過的日期
+}

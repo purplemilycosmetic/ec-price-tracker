@@ -1,5 +1,5 @@
 import { adminDb, todayTaipei, fetchAll } from '@/lib/db';
-import { cleanNews } from '@/lib/news';
+import { cleanNews, eventStatus } from '@/lib/news';
 import { loadUserProducts, loadHidden } from '@/lib/custom';
 import Dashboard, { type Listing, type Snap, type PlatformEvent, type OfficialProduct } from './Dashboard';
 
@@ -37,7 +37,7 @@ export default async function Page() {
     <Dashboard
       listings={(listings || []) as Listing[]}
       snaps={(snaps || []) as Snap[]}
-      events={[...(banks || []).map((b: any) => ({ ...b, image_url: b.image_url || b.archived_image_url })), ...cleanNews((news || []) as PlatformEvent[])] as PlatformEvent[]}
+      events={[...(banks || []).map((b: any) => ({ ...b, image_url: b.image_url || b.archived_image_url })), ...upcomingNews(cleanNews((news || []) as PlatformEvent[]), todayTaipei())] as PlatformEvent[]}
       officials={(officials || []) as OfficialProduct[]}
       today={todayTaipei()}
       userProducts={userProducts}
@@ -45,4 +45,12 @@ export default async function Page() {
       coupons={(coupons || []) as any}
     />
   );
+}
+
+// 購物節新聞：活動日期已經過的不顯示；有日期且還沒到的排前面並標示活動日
+function upcomingNews(items: PlatformEvent[], today: string) {
+  const withDate = items.map((n) => ({ ...n, event_on: eventStatus(n.title || '', n.published_at || today, today) }))
+    .filter((n) => !n.event_on.past)
+    .map((n) => ({ ...n, event_on: n.event_on.on }));
+  return withDate.sort((a, b) => (a.event_on && b.event_on ? a.event_on.localeCompare(b.event_on) : a.event_on ? -1 : b.event_on ? 1 : (b.published_at || '').localeCompare(a.published_at || '')));
 }

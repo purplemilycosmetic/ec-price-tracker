@@ -304,3 +304,4 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .coupon-form { grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 900px) { .coupon-form { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .coupon-form { grid-template-columns: 1fr; } }
+.event-on { display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 4px; font-size: 11px; font-weight: 500; background: var(--tint); color: var(--ink); }
