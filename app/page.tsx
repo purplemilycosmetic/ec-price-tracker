@@ -51,6 +51,8 @@ export default async function Page() {
 function upcomingNews(items: PlatformEvent[], today: string) {
   const withDate = items.map((n) => ({ ...n, event_on: eventStatus(n.title || '', n.published_at || today, today) }))
     .filter((n) => !n.event_on.past)
+    // 沒寫活動日期的一般優惠新聞只留最近 10 天
+    .filter((n) => n.event_on.on || (n.published_at || '') >= new Date(Date.now() - 10 * 86400_000).toISOString())
     .map((n) => ({ ...n, event_on: n.event_on.on }));
   return withDate.sort((a, b) => (a.event_on && b.event_on ? a.event_on.localeCompare(b.event_on) : a.event_on ? -1 : b.event_on ? 1 : (b.published_at || '').localeCompare(a.published_at || '')));
 }

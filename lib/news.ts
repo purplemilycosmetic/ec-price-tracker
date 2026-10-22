@@ -8,7 +8,7 @@ export const NEWS_QUERIES: Record<string, string[]> = {
 
 const NAME: Record<string, RegExp> = { momo: /momo|富邦媒/i, shopee: /蝦皮|shopee/i, coupang: /酷澎|coupang/i };
 const PUNCT = /[\s!-\/:-@\[-`{-~，。！？、：；「」『』（）【】…—‧·｜★☆]/g;
-const NOISE = /當機|回應|詐騙|查核|假冒|簡訊|釣魚|客訴|裁員|罰|股價|營收/;
+const NOISE = /當機|回應|詐騙|查核|假冒|簡訊|釣魚|客訴|裁員|罰|股價|營收|商家|賣家|Ads|廣告主|投放|財報|法說/;
 const RELEVANT = /優惠|活動|購物節|折|回饋|免運|券|下殺|狂歡|週年慶|雙1|雙十|11\.11|1111|12\.12|限時/;
 
 export type NewsItem = { platform: string; title: string; url: string; source: string; published_at: string };
@@ -69,7 +69,8 @@ export function eventDates(title: string, publishedAt: string): string[] {
   for (const m of Array.from(t.matchAll(/(\d{1,2})月(\d{1,2})[日號]/g))) if (ok(+m[1], +m[2])) md.push([+m[1], +m[2]]);
   if (/雙十一|雙11|1111/.test(t)) md.push([11, 11]);
   if (/雙十二|雙12|1212/.test(t)) md.push([12, 12]);
-  if (/雙十(?![一二])|雙10(?!\d)/.test(t)) md.push([10, 10]);
+  if (/雙十(?![一二])|雙10(?!\d)|國慶/.test(t)) md.push([10, 10]);
+  if (/光棍節/.test(t)) md.push([11, 11]);
   // 年初的活動在年底發的新聞裡多半是指明年
   return md.map(([m, d]) => `${m <= 3 && pm >= 11 ? y + 1 : y}-${pad2(m)}-${pad2(d)}`);
 }
