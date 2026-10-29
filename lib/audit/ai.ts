@@ -1,5 +1,5 @@
 // AI 能見度：有 GEMINI_API_KEY 時直接問 Gemini（免費額度）；沒有金鑰時用搜尋結果當替代指標（在 score.ts 計算）
-import { mentionsBrand, BEAUTY_BRANDS } from './common';
+import { mentionsBrand, brandsIn } from './common';
 
 export function aiPrompts(brand: string, category: string) {
   const c = category || '保養品';
@@ -36,7 +36,7 @@ export async function auditAi(brand: string, aliases: string[], category: string
   const answers = await Promise.all(prompts.map(async (p, i) => {
     await new Promise((ok) => setTimeout(ok, i * 700));
     const a = await askGemini(p.q, key).catch((e) => ({ ok: false, text: '', grounded: false, error: String(e), sources: [] as string[] }));
-    const others = BEAUTY_BRANDS.filter((b) => a.text.toLowerCase().includes(b.toLowerCase()) && !mentionsBrand(b, aliases));
+    const others = brandsIn(a.text, aliases);
     return { ...p, ...a, mentioned: a.ok && mentionsBrand(a.text, aliases), others: Array.from(new Set(others)).slice(0, 10), text: a.text.slice(0, 2500) };
   }));
   return { enabled: true as const, model: process.env.GEMINI_MODEL || 'gemini-2.5-flash', answers };

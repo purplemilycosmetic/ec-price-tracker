@@ -123,6 +123,8 @@ export function scoreAudit(brand: string, category: string, parts: Parts) {
     if (new Set(titles).size < titles.length) risk.push('多個頁面使用相同標題，AI 較難區分各系列用途');
     if (!site.sitemap.ok) bad.push('沒有找到 sitemap.xml，新頁面較慢被收錄');
   }
+  const fb = (speed as any)?.fallback as { ms: number; kb: number; scripts: number } | undefined;
+  if (!speed?.ok && fb) (fb.ms > 2500 || fb.kb > 500 || fb.scripts > 40 ? bad : good).push(`首頁回應 ${(fb.ms / 1000).toFixed(1)} 秒、HTML ${fb.kb} KB、${fb.scripts} 個程式檔（簡易量測）`);
   if (speed?.ok) {
     const lcp = (speed.lcp ?? 0) / 1000, cls = speed.cls ?? 0;
     ((speed.performance ?? 0) < 50 || lcp > 4 || cls > 0.25 ? bad : good).push(`手機版速度分數 ${speed.performance}／100，LCP ${lcp.toFixed(1)} 秒、CLS ${cls.toFixed(3)}`);

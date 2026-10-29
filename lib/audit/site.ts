@@ -59,8 +59,12 @@ function pickLinks(html: string, base: string, max = 4) {
     } catch {}
   }
   const all = Array.from(urls).filter((u) => u.replace(/\/$/, '') !== base.replace(/\/$/, ''));
-  const score = (u: string) => (/product|products|collections?|category|series|item|goods|shop|系列|商品/i.test(decodeURIComponent(u)) ? 0 : 1);
-  return { count: all.length, picked: all.sort((a, b) => score(a) - score(b)).slice(0, max) };
+  // 兩個產品頁＋兩個分類／系列頁，不足再補其他頁
+  const prod = all.filter((u) => /\/products?\/|\/item|\/goods|商品/i.test(decodeURIComponent(u)));
+  const cat = all.filter((u) => !prod.includes(u) && /collections?|category|categories|series|系列|分類/i.test(decodeURIComponent(u)));
+  const rest = all.filter((u) => !prod.includes(u) && !cat.includes(u));
+  const picked = Array.from(new Set([...prod.slice(0, 2), ...cat.slice(0, 2), ...prod.slice(2), ...cat.slice(2), ...rest])).slice(0, max);
+  return { count: all.length, picked };
 }
 
 const AI_BOTS = ['GPTBot', 'ChatGPT-User', 'OAI-SearchBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended', 'CCBot'];

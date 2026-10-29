@@ -56,7 +56,7 @@ export default async function Report({ params }: { params: { id: string } }) {
         <div className="audit-cards">
           <div><h4>AI 推薦測試</h4><b>{ai?.enabled ? `${ai.answers.filter((x) => x.type === 'recommend' && x.mentioned).length} / ${ai.answers.filter((x) => x.type === 'recommend').length} 題提到品牌` : `${rec.filter((q) => q.hits.some((h) => h.brand)).length} / ${rec.length} 個推薦搜尋有出現`}</b></div>
           <div><h4>品牌搜尋</h4><b>{(() => { const bq = search?.queries.find((q) => q.type === 'brand'); const i = bq ? bq.hits.findIndex((h) => h.kind === 'official') + 1 : 0; return i ? `官網排第 ${i}` : '官網未進前 10'; })()}</b></div>
-          <div><h4>網站速度</h4><b>{speed?.ok ? `手機 ${speed.performance} / 100` : '未測得'}</b></div>
+          <div><h4>網站速度</h4><b>{speed?.ok ? `手機 ${speed.performance} / 100` : (speed as any)?.fallback ? `首頁回應 ${((speed as any).fallback.ms / 1000).toFixed(1)} 秒` : '未測得'}</b>{!speed?.ok && (speed as any)?.fallback && <p className="hist-sub">{(speed as any).error}，改用簡易量測；HTML {(speed as any).fallback.kb} KB、{(speed as any).fallback.scripts} 個程式檔</p>}</div>
         </div>
       </section>
 

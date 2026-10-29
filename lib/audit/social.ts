@@ -5,7 +5,7 @@ import { adminDb } from '../db';
 export const SOCIAL_SITES = [
   { key: 'dcard', name: 'Dcard', site: 'dcard.tw', video: false },
   { key: 'ptt', name: 'PTT', site: 'ptt.cc', video: false },
-  { key: 'threads', name: 'Threads', site: 'threads.net', video: false },
+  { key: 'threads', name: 'Threads', site: 'threads.com', video: false },
   { key: 'instagram', name: 'Instagram', site: 'instagram.com', video: false },
   { key: 'facebook', name: 'Facebook', site: 'facebook.com', video: false },
   { key: 'youtube', name: 'YouTube', site: 'youtube.com', video: true },
