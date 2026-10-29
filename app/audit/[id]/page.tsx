@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 
 const level = (n: number) => (n >= 70 ? ['良好', 'lv-good'] : n >= 40 ? ['普通', 'lv-mid'] : n >= 15 ? ['偏低', 'lv-low'] : ['極低', 'lv-bad']);
 
-export default async function Report({ params }: { params: { id: string } }) {
+export default async function Report({ params, searchParams }: { params: { id: string }; searchParams: { retry?: string } }) {
   const { data: a } = await adminDb().from('ec_brand_audits').select('*').eq('id', +params.id).single();
   if (!a) notFound();
   const r = a.result || {};
@@ -26,11 +26,16 @@ export default async function Report({ params }: { params: { id: string } }) {
   const { data: prev } = await adminDb().from('ec_brand_audits').select('id,score,created_at').eq('url', a.url).eq('status', 'done').lt('created_at', a.created_at).order('created_at', { ascending: false }).limit(1);
   const day = new Date(new Date(a.created_at).getTime() + 8 * 3600e3).toISOString().slice(0, 10);
 
-  if (a.status !== 'done' || !s) {
+  // 這次沒查到的平台／關鍵字（搜尋服務限流）
+  const missSocial = (social?.sites ?? []).filter((x) => x.status !== 200).map((x) => x.name);
+  const missSearch = (search?.queries ?? []).filter((x) => x.status !== 200).map((x) => `「${x.q}」`);
+  const retry = !!searchParams.retry && (missSocial.length > 0 || missSearch.length > 0);
+  if (a.status !== 'done' || !s || retry) {
+    const redo = retry ? [...(missSocial.length ? ['social'] : []), ...(missSearch.length ? ['search', 'sources'] : [])] : [];
     return (
       <main className="page">
         <section className="search-head"><h1 className="display">{a.brand}｜品牌健檢</h1><p className="lede">{a.url}</p></section>
-        <Runner id={a.id} done={['site', 'speed', 'search', 'sources', 'social', 'ai'].filter((k) => k in r)} />
+        <Runner id={a.id} done={['site', 'speed', 'search', 'sources', 'social', 'ai'].filter((k) => k in r && !redo.includes(k))} />
       </main>
     );
   }
@@ -49,6 +54,9 @@ export default async function Report({ params }: { params: { id: string } }) {
           <div><span className="big num">{s.score}</span><span className="of">/ 100</span></div>
           <div><span className={`grade ${lvCls}`}>{s.grade} 級</span><p>{s.gradeLabel}</p>{prev?.[0] && <p className="hist-sub">上次 {prev[0].score} 分（<a href={`/audit/${prev[0].id}`}>查看</a>），{s.score - prev[0].score >= 0 ? `進步 ${s.score - prev[0].score}` : `下降 ${prev[0].score - s.score}`} 分</p>}</div>
         </div>
+        {(missSocial.length > 0 || missSearch.length > 0) && (
+          <p className="warn">這次有部分資料沒查到（免費搜尋服務暫時限流）：{[...missSearch, ...missSocial].join('、')}。這些項目不計入分數。<a href={`/audit/${a.id}?retry=1`}>補查缺漏</a></p>
+        )}
         <nav className="seg audit-nav">{nav.map(([k, t], i) => <a key={k} href={`#${k}`}>{String(i + 1).padStart(2, '0')} {t}</a>)}</nav>
       </section>
 

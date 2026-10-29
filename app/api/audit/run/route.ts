@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
     let val: unknown;
     if (stage === 'site') val = await auditSite(a.url);
     else if (stage === 'speed') val = await auditSpeed(a.url);
-    else if (stage === 'search') val = await auditSearch(a.brand, aliases, a.url, category);
-    else if (stage === 'social') val = await auditSocial(a.brand, aliases);
+    else if (stage === 'search') val = await auditSearch(a.brand, aliases, a.url, category, a.result?.search);
+    else if (stage === 'social') val = await auditSocial(a.brand, aliases, a.result?.social);
     else if (stage === 'ai') val = await auditAi(a.brand, aliases, category);
     else if (stage === 'sources') val = await auditSources(a.result?.search, aliases);
     else if (stage === 'score') {
@@ -37,7 +37,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, score: s.score });
     } else return NextResponse.json({ error: '未知階段' }, { status: 400 });
     await db.rpc('ec_audit_merge', { p_id: a.id, p_key: stage, p_val: val as any });
-    return NextResponse.json({ ok: true });
+    // 有平台或關鍵字這次沒查到，前端會自動再補查一次
+    const v = val as any;
+    const missing = stage === 'social' ? v.sites.filter((x: any) => x.status !== 200).length : stage === 'search' ? v.queries.filter((x: any) => x.status !== 200).length : 0;
+    return NextResponse.json({ ok: true, missing });
   } catch (e) {
     await db.rpc('ec_audit_merge', { p_id: a.id, p_key: stage + '_error', p_val: String(e).slice(0, 300) as any });
     return NextResponse.json({ error: String(e).slice(0, 200) }, { status: 500 });

@@ -44,10 +44,30 @@ export function parseDdg(md: string): Hit[] {
   }
   return out;
 }
-export async function ddg(q: string, opts: { df?: 'd' | 'w' | 'm' | 'y' } = {}) {
+// 免費轉讀服務短時間請求太多會回 429：同一個程序內排隊、間隔送出，被限流就等久一點再試
+let gate = Promise.resolve();
+let last = 0;
+const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+async function slot(gap = 1500) {
+  const prev = gate;
+  let release = () => {};
+  gate = new Promise<void>((ok) => { release = ok; });
+  await prev;
+  const wait = last + gap - Date.now();
+  if (wait > 0) await sleep(wait);
+  last = Date.now();
+  release();
+}
+export async function ddg(q: string, opts: { df?: 'd' | 'w' | 'm' | 'y'; deadline?: number } = {}) {
   const u = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}${opts.df ? `&df=${opts.df}` : ''}&kl=tw-tzh`;
-  let r = await get('https://r.jina.ai/' + u, 25000);
-  if (r.status !== 200) { await new Promise((ok) => setTimeout(ok, 2000)); r = await get('https://r.jina.ai/' + u, 25000); }
+  const deadline = opts.deadline ?? Date.now() + 40000;
+  let r = { status: 0, text: '' } as { status: number; text: string };
+  for (const backoff of [0, 4000, 9000]) {
+    if (backoff) { if (Date.now() + backoff + 8000 > deadline) break; await sleep(backoff); }
+    await slot();
+    r = await get('https://r.jina.ai/' + u, Math.max(5000, Math.min(20000, deadline - Date.now())));
+    if (r.status === 200) break;
+  }
   return { status: r.status, hits: r.status === 200 ? parseDdg(r.text) : [] };
 }
 

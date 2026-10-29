@@ -67,16 +67,19 @@ export function scoreAudit(brand: string, category: string, parts: Parts) {
     note: `品牌搜尋前段有 ${mediaHosts.length} 個媒體網站${mediaHosts.length ? `（${mediaHosts.slice(0, 4).join('、')}）` : ''}、${blogHosts.length} 個個人部落格；${read.length ? `「${category}」推薦文章 ${read.length} 篇中有 ${cited.length} 篇提到品牌。` : '沒有讀到推薦文章。'}` });
 
   // 5 社群口碑
-  const nonVideo = (social?.sites ?? []).filter((s) => !s.video);
+  const nonVideo = (social?.sites ?? []).filter((s) => !s.video && s.status === 200);
+  const nvAll = (social?.sites ?? []).filter((s) => !s.video).length || 5;
+  const nvScale = nonVideo.length ? nvAll / nonVideo.length : 1; // 沒查到的平台不算 0，用查到的平台等比換算
   dims.push({ key: 'social', name: '社群口碑', weight: 10,
     // 只看近一年的貼文，舊文章不能代表現在的口碑
-    score: clamp(nonVideo.filter((s) => s.recent > 0).length * 8 + Math.min(40, nonVideo.reduce((a, s) => a + s.recent, 0) * 3) + Math.min(20, (social?.forum ?? 0) * 4)),
+    score: clamp(nonVideo.filter((s) => s.recent > 0).length * 8 * nvScale + Math.min(40, nonVideo.reduce((a, s) => a + s.recent, 0) * 3 * nvScale) + Math.min(20, (social?.forum ?? 0) * 4)),
     note: social ? `近一年被收錄的相關貼文（每平台最多看 10 筆）：${nonVideo.map((s) => `${s.name} ${s.recent}`).join('、')}；本站論壇近 90 天提及 ${social.forum} 篇。` : '尚未檢查。' });
 
   // 6 影音內容
-  const video = (social?.sites ?? []).filter((s) => s.video);
+  const videoAll = (social?.sites ?? []).filter((s) => s.video).length || 2;
+  const video = (social?.sites ?? []).filter((s) => s.video && s.status === 200);
   dims.push({ key: 'video', name: '影音內容', weight: 5,
-    score: clamp(video.reduce((a, s) => a + (s.recent > 0 ? 15 : 0) + Math.min(35, s.recent * 6), 0)),
+    score: clamp(video.reduce((a, s) => a + (s.recent > 0 ? 15 : 0) + Math.min(35, s.recent * 6), 0) * (video.length ? videoAll / video.length : 1)),
     note: video.length ? `近一年被收錄的相關影片（每平台最多看 10 筆）：${video.map((s) => `${s.name} ${s.recent}`).join('、')}。` : '尚未檢查。' });
 
   // 7 AI 推薦潛力

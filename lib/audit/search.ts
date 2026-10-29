@@ -9,17 +9,22 @@ export function recommendQueries(category: string) {
   return [`${c} 推薦`, `台灣 ${c} 推薦 品牌`, `${c} 比較 評價`];
 }
 
-export async function auditSearch(brand: string, aliases: string[], url: string, category: string) {
+export async function auditSearch(brand: string, aliases: string[], url: string, category: string, prev?: { queries?: Query[] }) {
   const official = hostOf(url);
   const qs: { q: string; type: Query['type'] }[] = [
     { q: brand, type: 'brand' }, { q: `${aliases[0] ?? brand} 評價`, type: 'brand' },
     ...recommendQueries(category).map((q) => ({ q, type: 'recommend' as const })),
   ];
-  const results: Query[] = await Promise.all(qs.map(async ({ q, type }, i) => {
-    await new Promise((ok) => setTimeout(ok, i * 400));
-    const r = await ddg(q);
-    return { q, type, status: r.status, hits: r.hits.slice(0, 10).map((h) => ({ ...h, kind: kindOf(h.host, official), brand: mentionsBrand(`${h.title} ${h.snippet} ${h.url}`, aliases) })) };
-  }));
+  const deadline = Date.now() + 48000;
+  const results: Query[] = [];
+  // 依序查；上次已經查到的沿用，只補查失敗的
+  for (const { q, type } of qs) {
+    const old = prev?.queries?.find((x) => x.q === q && x.status === 200);
+    if (old) { results.push(old); continue; }
+    if (Date.now() > deadline - 6000) { results.push({ q, type, status: 0, hits: [] }); continue; }
+    const r = await ddg(q, { deadline });
+    results.push({ q, type, status: r.status, hits: r.hits.slice(0, 10).map((h) => ({ ...h, kind: kindOf(h.host, official), brand: mentionsBrand(`${h.title} ${h.snippet} ${h.url}`, aliases) })) });
+  }
   // 推薦情境中出現的其他品牌
   const others: Record<string, number> = {};
   for (const r of results.filter((x) => x.type === 'recommend')) for (const h of r.hits) {

@@ -12,15 +12,21 @@ export const SOCIAL_SITES = [
   { key: 'tiktok', name: 'TikTok', site: 'tiktok.com', video: true },
 ];
 
-export async function auditSocial(brand: string, aliases: string[]) {
+export async function auditSocial(brand: string, aliases: string[], prev?: { sites?: { key: string; status: number }[] }) {
   const name = aliases[0] ?? brand;
-  const sites = await Promise.all(SOCIAL_SITES.map(async (s, i) => {
-    await new Promise((ok) => setTimeout(ok, i * 600)); // 錯開，避免轉讀服務限流
+  const deadline = Date.now() + 48000; // 函式上限 60 秒，留時間存檔
+  type Site = (typeof SOCIAL_SITES)[number] & { status: number; count: number; recent: number; samples: { title: string; url: string; date: string | null }[] };
+  const sites: Site[] = [];
+  // 依序查（同時送會被搜尋轉讀服務限流）；上次已經查到的平台沿用，只補查失敗的
+  for (const s of SOCIAL_SITES) {
+    const old = prev?.sites?.find((x) => x.key === s.key && x.status === 200);
+    if (old) { sites.push(old as Site); continue; }
+    if (Date.now() > deadline - 6000) { sites.push({ ...s, status: 0, count: 0, recent: 0, samples: [] }); continue; }
     // 只搜近一年（搜尋結果大多沒有日期，交給搜尋引擎過濾）
-    const all = await ddg(`site:${s.site} ${name}`, { df: 'y' });
+    const all = await ddg(`site:${s.site} ${name}`, { df: 'y', deadline });
     const rel = all.hits.filter((h) => mentionsBrand(`${h.title} ${h.snippet} ${h.url}`, aliases));
-    return { ...s, status: all.status, count: rel.length, recent: rel.length, samples: rel.slice(0, 4).map((h) => ({ title: h.title, url: h.url, date: h.date })) };
-  }));
+    sites.push({ ...s, status: all.status, count: rel.length, recent: rel.length, samples: rel.slice(0, 4).map((h) => ({ title: h.title, url: h.url, date: h.date })) });
+  }
   // 本站論壇資料（PTT、Dcard、Threads、IG、FB，近 90 天）
   let forum = 0;
   try {
