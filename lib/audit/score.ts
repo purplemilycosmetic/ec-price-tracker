@@ -4,8 +4,9 @@ import type { SpeedResult } from './speed';
 import type { SearchResult } from './search';
 import type { SocialResult } from './social';
 import type { AiResult } from './ai';
+import type { SourcesResult } from './sources';
 
-export type Parts = { site?: SiteResult; speed?: SpeedResult; search?: SearchResult; social?: SocialResult; ai?: AiResult };
+export type Parts = { site?: SiteResult; speed?: SpeedResult; search?: SearchResult; social?: SocialResult; ai?: AiResult; sources?: SourcesResult };
 export type Dim = { key: string; name: string; score: number; note: string; weight: number; estimated?: boolean };
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
@@ -24,8 +25,11 @@ function pageOk(p: PageCheck) {
 }
 
 export function scoreAudit(brand: string, category: string, parts: Parts) {
-  const { site, speed, search, social, ai } = parts;
+  const { site, speed, search, social, ai, sources } = parts;
+  const read = (sources?.articles ?? []).filter((x) => x.ok);
+  const cited = read.filter((x) => x.mentioned);
   const pages = site ? [site.home, ...site.pages].filter((p) => p.status === 200) : [];
+  const brandTokens = brand.split(/[\s／/|（）()]+/).map((x) => x.toLowerCase().replace(/[-.\s]/g, '')).filter((x) => /^[a-z0-9]{4,}$/.test(x));
   const types = new Set(pages.flatMap((p) => p.schemaTypes));
   const has = (...t: string[]) => t.some((x) => types.has(x));
   const avgText = pages.length ? pages.reduce((a, p) => a + p.textChars, 0) / pages.length : 0;
@@ -34,7 +38,8 @@ export function scoreAudit(brand: string, category: string, parts: Parts) {
   // 1 官網 SEO 結構
   const pageScore = pages.length ? pages.reduce((a, p) => a + pageOk(p), 0) / pages.length : 0;
   dims.push({ key: 'seo', name: '官網 SEO 結構', weight: 15,
-    score: site?.reachable ? clamp(pageScore * 70 + (site.robots.ok ? 10 : 0) + (site.sitemap.ok ? 10 : 0) + (site.https ? 10 : 0)) : 0,
+    score: site?.reachable ? clamp(pageScore * 50 + (site.robots.ok ? 10 : 0) + (site.sitemap.ok ? 10 : 0) + (site.https ? 5 : 0)
+      + (new Set(pages.map((p) => p.title)).size === pages.length ? 10 : 0) + (has('Product', 'ProductGroup') ? 15 : 0)) : 0,
     note: site?.reachable ? `抽查 ${pages.length} 頁，基本標籤達成率 ${Math.round(pageScore * 100)}%；robots.txt ${site.robots.ok ? '有' : '沒有'}、sitemap ${site.sitemap.ok ? '有' : '沒有'}。` : `官網無法讀取（HTTP ${site?.status ?? '—'}）。` });
 
   // 2 AI 可讀性
@@ -51,22 +56,29 @@ export function scoreAudit(brand: string, category: string, parts: Parts) {
 
   // 4 第三方媒體
   const brandHits = (search?.queries ?? []).filter((q) => q.type === 'brand').flatMap((q) => q.hits).filter((h) => h.brand);
-  const mediaHosts = Array.from(new Set(brandHits.filter((h) => h.kind === 'media' || h.kind === 'wiki').map((h) => h.host)));
-  dims.push({ key: 'media', name: '第三方媒體', weight: 10, score: clamp(mediaHosts.length * 14 + (brandHits.some((h) => h.kind === 'wiki') ? 10 : 0)),
-    note: mediaHosts.length ? `品牌搜尋前段出現 ${mediaHosts.length} 個媒體／部落格網站：${mediaHosts.slice(0, 5).join('、')}。` : '品牌搜尋前段沒有看到媒體或評測文章。' });
+  // 品牌自己的其他網域（例如香港官網）不算第三方；個人部落格權重較低
+  const own = (h: string) => brandTokens.some((t) => h.replace(/[-.]/g, '').includes(t));
+  const third = brandHits.filter((h) => (h.kind === 'media' || h.kind === 'wiki') && !own(h.host));
+  const blog = (h: string) => /pixnet|blogspot|wordpress|medium|vocus|matters|blog\./.test(h);
+  const mediaHosts = Array.from(new Set(third.filter((h) => !blog(h.host)).map((h) => h.host)));
+  const blogHosts = Array.from(new Set(third.filter((h) => blog(h.host)).map((h) => h.host)));
+  dims.push({ key: 'media', name: '第三方媒體', weight: 10,
+    score: clamp(Math.min(60, mediaHosts.length * 8 + blogHosts.length * 4) + (read.length ? (cited.length / read.length) * 40 : 0)),
+    note: `品牌搜尋前段有 ${mediaHosts.length} 個媒體網站${mediaHosts.length ? `（${mediaHosts.slice(0, 4).join('、')}）` : ''}、${blogHosts.length} 個個人部落格；${read.length ? `「${category}」推薦文章 ${read.length} 篇中有 ${cited.length} 篇提到品牌。` : '沒有讀到推薦文章。'}` });
 
   // 5 社群口碑
   const nonVideo = (social?.sites ?? []).filter((s) => !s.video);
   const socialTotal = nonVideo.reduce((a, s) => a + s.count, 0);
   dims.push({ key: 'social', name: '社群口碑', weight: 10,
-    score: clamp(nonVideo.filter((s) => s.count > 0).length * 12 + Math.min(30, socialTotal * 2) + Math.min(10, social?.forum ?? 0)),
-    note: social ? `${nonVideo.map((s) => `${s.name} ${s.count}`).join('、')} 則被收錄的相關貼文；本站論壇近 90 天提及 ${social.forum} 篇。` : '尚未檢查。' });
+    // 只看近一年的貼文，舊文章不能代表現在的口碑
+    score: clamp(nonVideo.filter((s) => s.recent > 0).length * 8 + Math.min(40, nonVideo.reduce((a, s) => a + s.recent, 0) * 3) + Math.min(20, (social?.forum ?? 0) * 4)),
+    note: social ? `近一年被收錄的相關貼文：${nonVideo.map((s) => `${s.name} ${s.recent}`).join('、')}（不限時間共 ${socialTotal}）；本站論壇近 90 天提及 ${social.forum} 篇。` : '尚未檢查。' });
 
   // 6 影音內容
   const video = (social?.sites ?? []).filter((s) => s.video);
   dims.push({ key: 'video', name: '影音內容', weight: 5,
-    score: clamp(video.reduce((a, s) => a + (s.count > 0 ? 25 : 0) + Math.min(25, s.count * 4), 0)),
-    note: video.length ? `${video.map((s) => `${s.name} ${s.count}`).join('、')} 支被收錄的相關影片。` : '尚未檢查。' });
+    score: clamp(video.reduce((a, s) => a + (s.recent > 0 ? 15 : 0) + Math.min(35, s.recent * 6), 0)),
+    note: video.length ? `近一年被收錄的相關影片：${video.map((s) => `${s.name} ${s.recent}`).join('、')}（不限時間共 ${video.reduce((a, s) => a + s.count, 0)}）。` : '尚未檢查。' });
 
   // 7 AI 推薦潛力
   const rec = (search?.queries ?? []).filter((q) => q.type === 'recommend');
@@ -80,8 +92,8 @@ export function scoreAudit(brand: string, category: string, parts: Parts) {
     aiNote = `問 Gemini ${r.length} 題選購推薦，${r.filter((a) => a.mentioned).length} 題有提到品牌；品牌知識題 ${k.filter((a) => a.mentioned).length}/${k.length} 題能正確回答到品牌。`;
   } else {
     aiEstimated = true;
-    aiScore = rec.length ? clamp(pct(recHit.length, rec.length) * 70 + pct(recTop3.length, rec.length) * 30) : 0;
-    aiNote = rec.length ? `（推估）未設定 AI 金鑰，改用搜尋結果判斷：${rec.length} 個選購推薦搜尋中，${recHit.length} 個前 10 筆有出現品牌。` : '未填主要品類，無法測試選購推薦情境。';
+    aiScore = rec.length ? clamp(pct(recHit.length, rec.length) * 30 + pct(recTop3.length, rec.length) * 20 + (read.length ? pct(cited.length, read.length) * 50 : 0)) : 0;
+    aiNote = rec.length ? `（推估）未設定 AI 金鑰，改用 AI 常引用的來源判斷：「${category}」推薦搜尋前 10 筆標題中 ${recHit.length}/${rec.length} 次有品牌；排名前面的推薦文章 ${read.length} 篇中 ${cited.length} 篇提到品牌。` : '未填主要品類，無法測試選購推薦情境。';
   }
   dims.push({ key: 'ai', name: 'AI 推薦潛力', weight: 20, score: aiScore, note: aiNote, estimated: aiEstimated });
 

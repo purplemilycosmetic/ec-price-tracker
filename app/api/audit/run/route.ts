@@ -6,6 +6,7 @@ import { auditSpeed } from '@/lib/audit/speed';
 import { auditSearch } from '@/lib/audit/search';
 import { auditSocial } from '@/lib/audit/social';
 import { auditAi } from '@/lib/audit/ai';
+import { auditSources } from '@/lib/audit/sources';
 import { scoreAudit } from '@/lib/audit/score';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
     else if (stage === 'search') val = await auditSearch(a.brand, aliases, a.url, category);
     else if (stage === 'social') val = await auditSocial(a.brand, aliases);
     else if (stage === 'ai') val = await auditAi(a.brand, aliases, category);
+    else if (stage === 'sources') val = await auditSources(a.result?.search, aliases);
     else if (stage === 'score') {
       const s = scoreAudit(a.brand, category, a.result || {});
       await db.from('ec_brand_audits').update({ status: 'done', score: s.score, grade: s.grade, updated_at: new Date().toISOString() }).eq('id', a.id);

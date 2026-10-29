@@ -7,6 +7,7 @@ import type { SpeedResult } from '@/lib/audit/speed';
 import type { SearchResult } from '@/lib/audit/search';
 import type { SocialResult } from '@/lib/audit/social';
 import type { AiResult } from '@/lib/audit/ai';
+import type { SourcesResult } from '@/lib/audit/sources';
 import Runner from './Runner';
 import Radar from './Radar';
 import AuditForm from '../AuditForm';
@@ -21,6 +22,7 @@ export default async function Report({ params }: { params: { id: string } }) {
   const r = a.result || {};
   const site = r.site as SiteResult | undefined, speed = r.speed as SpeedResult | undefined, search = r.search as SearchResult | undefined;
   const social = r.social as SocialResult | undefined, ai = r.ai as AiResult | undefined, s = r.scored as Scored | undefined;
+  const sources = r.sources as SourcesResult | undefined;
   const { data: prev } = await adminDb().from('ec_brand_audits').select('id,score,created_at').eq('url', a.url).eq('status', 'done').lt('created_at', a.created_at).order('created_at', { ascending: false }).limit(1);
   const day = new Date(new Date(a.created_at).getTime() + 8 * 3600e3).toISOString().slice(0, 10);
 
@@ -28,7 +30,7 @@ export default async function Report({ params }: { params: { id: string } }) {
     return (
       <main className="page">
         <section className="search-head"><h1 className="display">{a.brand}｜品牌健檢</h1><p className="lede">{a.url}</p></section>
-        <Runner id={a.id} done={['site', 'speed', 'search', 'social', 'ai'].filter((k) => k in r)} />
+        <Runner id={a.id} done={['site', 'speed', 'search', 'sources', 'social', 'ai'].filter((k) => k in r)} />
       </main>
     );
   }
@@ -95,6 +97,19 @@ export default async function Report({ params }: { params: { id: string } }) {
             {!rec.length && <p className="none">未填主要品類，沒有測試推薦情境。</p>}
           </>
         )}
+        {sources?.articles.length ? (
+          <>
+            <h3 className="sub-h">AI 常引用的推薦文章（排名前面的「{a.category}」推薦文）</h3>
+            <div className="table-wrap"><table className="grid-table hist-table">
+              <thead><tr><th scope="col">文章</th><th scope="col">有提到品牌</th><th scope="col">文中出現的品牌</th></tr></thead>
+              <tbody>{sources.articles.map((x) => (
+                <tr key={x.url} className="row-static"><th scope="row"><a href={x.url} target="_blank" rel="noreferrer">{x.title}</a><span className="hist-sub">{x.host}</span></th>
+                  <td data-label="有提到品牌"><span className={`lv ${!x.ok ? 'lv-mid' : x.mentioned ? 'lv-good' : 'lv-bad'}`}>{!x.ok ? '讀不到' : x.mentioned ? '有' : '沒有'}</span></td>
+                  <td data-label="文中出現的品牌">{x.brands.join('、') || '—'}</td></tr>
+              ))}</tbody>
+            </table></div>
+          </>
+        ) : null}
       </section>
 
       <section className="block" id="site">
@@ -125,11 +140,12 @@ export default async function Report({ params }: { params: { id: string } }) {
       </section>
 
       <section className="block" id="comp">
-        <div className="block-head"><h2>推薦情境中的競品</h2><p>{ai?.enabled ? 'Gemini 回答與' : ''}「{a.category || '品類'}」推薦搜尋結果中出現的其他品牌與次數。</p></div>
+        <div className="block-head"><h2>推薦情境中的競品</h2><p>{ai?.enabled ? 'Gemini 回答、' : ''}「{a.category || '品類'}」推薦搜尋結果與推薦文章內文中出現的其他品牌與次數。</p></div>
         {(() => {
           const m: Record<string, number> = {};
           search?.competitors.forEach((c) => (m[c.name] = (m[c.name] || 0) + c.n));
           if (ai?.enabled) ai.answers.filter((x) => x.type === 'recommend').forEach((x) => x.others.forEach((o) => (m[o] = (m[o] || 0) + 1)));
+          sources?.articles.forEach((x) => x.brands.forEach((o) => (m[o] = (m[o] || 0) + 1)));
           const list = Object.entries(m).sort((x, y) => y[1] - x[1]).slice(0, 10);
           return list.length ? <ul className="kw">{list.map(([n, c]) => <li key={n}><span className="kw-w">{n}</span><span className="kw-bar"><span style={{ width: `${(c / list[0][1]) * 100}%` }} /></span><span className="num kw-n">{c}</span></li>)}</ul> : <p className="none">沒有足夠資料。</p>;
         })()}
