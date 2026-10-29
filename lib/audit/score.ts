@@ -146,7 +146,7 @@ export function scoreAudit(brand: string, category: string, parts: Parts) {
   }
 
   // ---- 最大問題點：分數最低的 4 項 ----
-  const issues = [...dims].sort((a, b) => a.score - b.score).slice(0, 4).map((d) => ({ name: d.name, score: d.score, text: d.note }));
+  const issues = dims.filter((d) => d.weight > 0).sort((a, b) => a.score - b.score).slice(0, 4).map((d) => ({ name: d.name, score: d.score, text: d.note }));
 
   // ---- 90 天建議 ----
   const s = (k: string) => dims.find((d) => d.key === k)!.score;
