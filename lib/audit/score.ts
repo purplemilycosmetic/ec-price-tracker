@@ -180,7 +180,7 @@ export function scoreAudit(brand: string, category: string, parts: Parts) {
     `${short} 怎麼選`, `${short} ${category || '系列'} 比較`, `${short} 哪裡買`,
   ].map((k) => {
     const q = tested.get(k);
-    const inArticles = read.filter((x) => x.q === k && x.mentioned);
+    const inArticles = q ? read.filter((x) => x.mentioned && q.hits.some((h) => h.url === x.url)) : []; // 同一篇文章可能出現在多個搜尋
     const status = !q ? '待驗證' : q.hits.some((h) => h.brand) ? '已出現' : inArticles.length ? '文章內出現' : '未出現';
     const note = !q ? (/怎麼選|比較/.test(k) ? '選購轉換詞，適合做比較指南' : '彙整官方通路，協助完成購買')
       : status === '已出現' ? `前 10 筆標題有品牌（第 ${q.hits.findIndex((h) => h.brand) + 1} 筆）`
