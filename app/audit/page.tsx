@@ -4,7 +4,7 @@ import AuditForm from './AuditForm';
 export const dynamic = 'force-dynamic';
 
 export default async function Audits() {
-  const { data } = await adminDb().from('ec_brand_audits').select('id,brand,url,category,status,score,grade,created_at').order('created_at', { ascending: false }).limit(60);
+  const { data } = await adminDb().from('ec_brand_audits').select('id,brand,url,category,status,score,grade,created_at').neq('status', 'test').order('created_at', { ascending: false }).limit(60);
   const rows = data || [];
   const tw = (s: string) => new Date(new Date(s).getTime() + 8 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
   return (
