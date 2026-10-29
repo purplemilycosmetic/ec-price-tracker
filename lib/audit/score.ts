@@ -174,12 +174,19 @@ export function scoreAudit(brand: string, category: string, parts: Parts) {
 
   // ---- 關鍵字 ----
   const tested = new Map((search?.queries ?? []).map((q) => [q.q, q]));
+  const short = brand.split(/\s+/)[0];
   const kw = [
     ...(category ? [`${category} 推薦`, `台灣 ${category} 推薦 品牌`, `${category} 比較 評價`] : []),
-    `${brand} 怎麼選`, `${brand} ${category || '系列'} 比較`, `${brand} 哪裡買`, `${brand} 評價`,
+    `${short} 怎麼選`, `${short} ${category || '系列'} 比較`, `${short} 哪裡買`,
   ].map((k) => {
     const q = tested.get(k);
-    return { keyword: k, status: q ? (q.hits.some((h) => h.brand) ? '已出現' : '未出現') : '待驗證', note: q ? (q.hits.some((h) => h.brand) ? `前 10 筆有品牌（第 ${q.hits.findIndex((h) => h.brand) + 1} 筆）` : '前 10 筆沒有品牌，值得搶') : (/怎麼選|比較/.test(k) ? '選購轉換詞，適合做比較指南' : /哪裡買/.test(k) ? '彙整官方通路，協助完成購買' : '品牌口碑詞') };
+    const inArticles = read.filter((x) => x.q === k && x.mentioned);
+    const status = !q ? '待驗證' : q.hits.some((h) => h.brand) ? '已出現' : inArticles.length ? '文章內出現' : '未出現';
+    const note = !q ? (/怎麼選|比較/.test(k) ? '選購轉換詞，適合做比較指南' : '彙整官方通路，協助完成購買')
+      : status === '已出現' ? `前 10 筆標題有品牌（第 ${q.hits.findIndex((h) => h.brand) + 1} 筆）`
+      : status === '文章內出現' ? `標題沒有品牌，但 ${inArticles.map((x) => x.host).join('、')} 的推薦文章內有列入；可爭取更前面的排名或專文`
+      : '前 10 筆與推薦文章都沒有品牌，值得搶';
+    return { keyword: k, status, note };
   });
 
   // ---- 結論 ----

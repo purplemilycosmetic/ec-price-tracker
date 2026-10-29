@@ -173,7 +173,7 @@ export default async function Report({ params }: { params: { id: string } }) {
       </section>
 
       <section className="block" id="kw">
-        <div className="block-head"><h2>最值得搶的關鍵字</h2><p>「已出現」「未出現」是實際搜尋的結果；「待驗證」是建議經營、這次沒有搜尋的詞。</p></div>
+        <div className="block-head"><h2>最值得搶的關鍵字</h2><p>「已出現」＝搜尋前 10 筆標題有品牌；「文章內出現」＝標題沒有，但排名前面的推薦文章內文有列入；「待驗證」是建議經營、這次沒有搜尋的詞。</p></div>
         <div className="table-wrap"><table className="grid-table hist-table">
           <thead><tr><th scope="col">關鍵字</th><th scope="col">狀態</th><th scope="col">說明</th></tr></thead>
           <tbody>{s.keywords.map((k) => <tr key={k.keyword} className="row-static"><th scope="row">{k.keyword}</th><td data-label="狀態"><span className={`lv ${k.status === '已出現' ? 'lv-good' : k.status === '未出現' ? 'lv-bad' : 'lv-mid'}`}>{k.status}</span></td><td data-label="說明">{k.note}</td></tr>)}</tbody>
