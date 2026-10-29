@@ -16,10 +16,10 @@ export async function auditSocial(brand: string, aliases: string[]) {
   const name = aliases[0] ?? brand;
   const sites = await Promise.all(SOCIAL_SITES.map(async (s, i) => {
     await new Promise((ok) => setTimeout(ok, i * 600)); // 錯開，避免轉讀服務限流
-    const all = await ddg(`site:${s.site} ${name}`);
+    // 只搜近一年（搜尋結果大多沒有日期，交給搜尋引擎過濾）
+    const all = await ddg(`site:${s.site} ${name}`, { df: 'y' });
     const rel = all.hits.filter((h) => mentionsBrand(`${h.title} ${h.snippet} ${h.url}`, aliases));
-    const yearAgo = new Date(Date.now() - 365 * 86400e3).toISOString().slice(0, 10);
-    return { ...s, status: all.status, count: rel.length, recent: rel.filter((h) => h.date && h.date >= yearAgo).length, samples: rel.slice(0, 4).map((h) => ({ title: h.title, url: h.url, date: h.date })) };
+    return { ...s, status: all.status, count: rel.length, recent: rel.length, samples: rel.slice(0, 4).map((h) => ({ title: h.title, url: h.url, date: h.date })) };
   }));
   // 本站論壇資料（PTT、Dcard、Threads、IG、FB，近 90 天）
   let forum = 0;

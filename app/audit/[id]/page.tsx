@@ -104,7 +104,7 @@ export default async function Report({ params }: { params: { id: string } }) {
               <thead><tr><th scope="col">文章</th><th scope="col">有提到品牌</th><th scope="col">文中出現的品牌</th></tr></thead>
               <tbody>{sources.articles.map((x) => (
                 <tr key={x.url} className="row-static"><th scope="row"><a href={x.url} target="_blank" rel="noreferrer">{x.title}</a><span className="hist-sub">{x.host}</span></th>
-                  <td data-label="有提到品牌"><span className={`lv ${!x.ok ? 'lv-mid' : x.mentioned ? 'lv-good' : 'lv-bad'}`}>{!x.ok ? '讀不到' : x.mentioned ? '有' : '沒有'}</span></td>
+                  <td data-label="有提到品牌"><span className={`lv ${!x.ok ? 'lv-mid' : x.mentioned ? 'lv-good' : 'lv-bad'}`}>{!x.ok ? '讀不到' : x.mentioned ? `有（${(x as any).hits} 處）` : '沒有'}</span>{(x as any).context && <span className="hist-sub">「{(x as any).context}」</span>}</td>
                   <td data-label="文中出現的品牌">{x.brands.join('、') || '—'}</td></tr>
               ))}</tbody>
             </table></div>
@@ -152,7 +152,7 @@ export default async function Report({ params }: { params: { id: string } }) {
       </section>
 
       <section className="block" id="social">
-        <div className="block-head"><h2>社群口碑與影音</h2><p>各平台被搜尋引擎收錄、提到品牌的貼文或影片（前 10 筆內）；本站論壇資料近 90 天提及 {social?.forum ?? 0} 篇。</p></div>
+        <div className="block-head"><h2>社群口碑與影音</h2><p>近一年各平台被搜尋引擎收錄、提到品牌的貼文或影片（每平台最多看 10 筆）；本站論壇資料近 90 天提及 {social?.forum ?? 0} 篇。</p></div>
         <div className="platforms">{social?.sites.map((x) => (
           <article key={x.key} className="plat-card"><h3>{x.name}<span className="count">{x.count} 筆</span></h3>
             {x.samples.length ? <ul className="news">{x.samples.map((p) => <li key={p.url}><a href={p.url} target="_blank" rel="noreferrer">{p.title}</a>{p.date && <span className="src">{p.date}</span>}</li>)}</ul> : <p className="none">{x.status === 200 ? '沒有找到' : '搜尋失敗'}</p>}
