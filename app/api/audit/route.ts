@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
   const brand = String(b.brand || '').trim().slice(0, 60);
   let url = String(b.url || '').trim();
   if (!brand || !url) return NextResponse.json({ error: '請填寫品牌名稱與官網' }, { status: 400 });
+  if (!String(b.category || '').trim()) return NextResponse.json({ error: '請填寫主要品類' }, { status: 400 });
   if (!/^https?:\/\//.test(url)) url = 'https://' + url;
   try { new URL(url); } catch { return NextResponse.json({ error: '官網網址格式不正確' }, { status: 400 }); }
   const { data, error } = await adminDb().from('ec_brand_audits').insert({

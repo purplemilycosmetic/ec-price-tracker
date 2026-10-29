@@ -95,9 +95,10 @@ export function scoreAudit(brand: string, category: string, parts: Parts) {
   } else {
     aiEstimated = true;
     aiScore = rec.length ? clamp(pct(recHit.length, rec.length) * 30 + pct(recTop3.length, rec.length) * 20 + (read.length ? pct(cited.length, read.length) * 50 : 0)) : 0;
-    aiNote = rec.length ? `（推估）未設定 AI 金鑰，改用 AI 常引用的來源判斷：「${category}」推薦搜尋前 10 筆標題中 ${recHit.length}/${rec.length} 次有品牌；排名前面的推薦文章 ${read.length} 篇中 ${cited.length} 篇提到品牌。` : '未填主要品類，無法測試選購推薦情境。';
+    aiNote = rec.length ? `（推估）未設定 AI 金鑰，改用 AI 常引用的來源判斷：「${category}」推薦搜尋前 10 筆標題中 ${recHit.length}/${rec.length} 次有品牌；排名前面的推薦文章 ${read.length} 篇中 ${cited.length} 篇提到品牌。` : '未填主要品類，無法測試選購推薦情境，這項不計入總分。請填品類後重新健檢。';
   }
-  dims.push({ key: 'ai', name: 'AI 推薦潛力', weight: 20, score: aiScore, note: aiNote, estimated: aiEstimated });
+  // 沒填品類就測不了推薦情境，這項不計分（不當 0 分）
+  dims.push({ key: 'ai', name: 'AI 推薦潛力', weight: !ai?.enabled && !rec.length ? 0 : 20, score: aiScore, note: aiNote, estimated: aiEstimated });
 
   // 8 SERP 品牌覆蓋率
   const bq = (search?.queries ?? []).find((q) => q.type === 'brand');
