@@ -30,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/compare">價格比較</a>
               <a href="/coupons">優惠券</a>
               <a href="/forum">論壇評論</a>
+              <a href="/audit">品牌健檢</a>
               <a href="/history">歷史查詢</a>
             </nav>
           </div>

@@ -305,3 +305,45 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 @media (max-width: 900px) { .coupon-form { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .coupon-form { grid-template-columns: 1fr; } }
 .event-on { display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 4px; font-size: 11px; font-weight: 500; background: var(--tint); color: var(--ink); }
+
+/* 品牌健檢 */
+.audit-form { grid-template-columns: 1fr 1fr; }
+.audit-steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.audit-steps li { display: flex; gap: 10px; font-size: 15px; }
+.audit-steps .st-run span { color: var(--momo); } .audit-steps .st-ok span { color: var(--down); } .audit-steps .st-err span { color: var(--up); }
+.audit-hero { margin-bottom: 24px; }
+.audit-eyebrow { font-family: var(--num); font-size: 12px; letter-spacing: .12em; color: var(--down); font-weight: 600; text-transform: uppercase; }
+.audit-hero h1 { font-size: clamp(30px, 5vw, 46px); margin: 6px 0 2px; }
+.audit-sub { font-size: 20px; color: var(--ink-2); margin: 0 0 8px; font-weight: 500; }
+.audit-score { display: flex; gap: 28px; align-items: center; margin: 18px 0; padding: 18px 22px; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; flex-wrap: wrap; }
+.audit-score .big { font-size: 64px; font-weight: 600; line-height: 1; }
+.audit-score .of { color: var(--muted); margin-left: 6px; }
+.audit-score p { margin: 6px 0 0; }
+.grade { display: inline-block; padding: 2px 12px; border-radius: 999px; font-weight: 600; border: 1px solid currentColor; }
+.lv { display: inline-block; margin-left: 8px; padding: 0 6px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+.lv-good { color: #1b7a52; background: #e3f4ec; } .lv-mid { color: #8a5a00; background: #fff2d6; } .lv-low { color: #b4452f; background: #fbe9e4; } .lv-bad { color: #fff; background: #b4452f; }
+.audit-nav { margin-top: 10px; flex-wrap: wrap; }
+.audit-quote { border-left: 4px solid var(--down); padding: 4px 0 4px 14px; font-size: 16px; line-height: 1.7; }
+.audit-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+.audit-cards > div { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 12px 14px; }
+.audit-cards h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+.audit-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 20px; align-items: start; }
+.radar { width: 100%; height: auto; }
+.radar-grid { fill: none; stroke: var(--rule); stroke-width: 1; }
+.radar-ref { fill: none; stroke: var(--down); stroke-dasharray: 5 4; opacity: .7; }
+.radar-area { fill: var(--down); fill-opacity: .18; stroke: var(--down); stroke-width: 2; }
+.radar-dot { fill: var(--down); }
+.radar-tick { font-size: 10px; fill: var(--muted); font-family: var(--num); }
+.radar-label { font-size: 13px; fill: var(--ink); font-weight: 500; }
+.audit-ai details { border: 1px solid var(--rule); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; background: var(--surface); }
+.audit-ai summary { cursor: pointer; line-height: 1.6; }
+.audit-ai summary .lv { margin: 0 8px 0 0; }
+.ai-answer { white-space: pre-wrap; font-size: 14px; line-height: 1.7; margin-top: 8px; color: var(--ink-2); }
+.serp { margin-bottom: 16px; }
+.serp-q { font-family: var(--num); font-size: 13px; background: var(--tint); padding: 6px 10px; border-radius: 6px; display: inline-block; margin-bottom: 6px; }
+.serp ol { margin: 0; padding-left: 22px; } .serp li { margin: 4px 0; }
+.kind { display: inline-block; min-width: 72px; margin-right: 8px; font-size: 12px; color: var(--muted); }
+.k-official { color: var(--down); font-weight: 600; } .k-media { color: #2a78d6; } .k-social { color: var(--momo); } .k-retail { color: var(--shopee); }
+.audit-issues { padding-left: 20px; } .audit-issues li { margin-bottom: 10px; } .audit-issues p { margin: 2px 0 0; color: var(--ink-2); }
+.audit-stages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .audit-split, .audit-stages, .audit-form { grid-template-columns: 1fr; } .audit-cards { grid-template-columns: 1fr; } }
