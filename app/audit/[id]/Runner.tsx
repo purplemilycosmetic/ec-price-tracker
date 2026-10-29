@@ -15,6 +15,12 @@ export default function Runner({ id, done }: { id: number; done: string[] }) {
     let key = ''; try { key = localStorage.getItem('ec-admin-key') || ''; } catch {}
     if (!key) key = window.prompt('輸入管理密碼以執行健檢') || '';
     if (!key) { setMsg('需要管理密碼才能執行'); return; }
+    // 防止重新整理後又回到執行畫面而一直重跑
+    const lk = `audit-run-${id}`;
+    let runs: number[] = [];
+    try { runs = JSON.parse(sessionStorage.getItem(lk) || '[]').filter((t: number) => Date.now() - t < 300000); } catch {}
+    if (runs.length >= 2) { setMsg('健檢已經執行過，但頁面沒有更新。請稍候一分鐘再重新整理這頁。'); return; }
+    try { sessionStorage.setItem(lk, JSON.stringify([...runs, Date.now()])); } catch {}
     const t0 = Date.now();
     const tick = setInterval(() => setSec(Math.round((Date.now() - t0) / 1000)), 1000);
     const run = async (stage: string): Promise<number> => {
